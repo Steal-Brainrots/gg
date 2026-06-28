@@ -101,11 +101,11 @@ getgenv().Config = {
     ["Buy Gear"] = {
         ["Enable"] = false,
         ["Gear"] = {
-            ["Common Watering Can"]  = true,   -- $2K
+            ["Common Watering Can"]  = false,   -- $2K
             ["Super Watering Can"]   = true,   -- $250K
-            ["Common Sprinkler"]     = true,   -- $3K
-            ["Uncommon Sprinkler"]   = true,   -- $10K
-            ["Rare Sprinkler"]       = true,   -- $50K
+            ["Common Sprinkler"]     = false,   -- $3K
+            ["Uncommon Sprinkler"]   = false,   -- $10K
+            ["Rare Sprinkler"]       = false,   -- $50K
             ["Legendary Sprinkler"]  = true,   -- $100K
             ["Super Sprinkler"]      = true,   -- $300K
         },
