@@ -1,5 +1,5 @@
 getgenv().Config = {
-    ["Max Plant Fruit"] = 150,
+    ["Max Plant Fruit"] = 200,
     ["Buy Expand Plot"] = true,
 	["Buy Slot Pet"] = true,
     ["Pet"] = {
