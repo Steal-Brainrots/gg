@@ -1,7 +1,7 @@
 getgenv().Config = {
     ["Max Plant Fruit"] = 200,
     ["Buy Expand Plot"] = true,
-	["Buy Slot Pet"] = true,
+	["Buy Slot Pet"] = false,
     ["Pet"] = {
         ["Auto Buy"] = {
             ["Enable"] = false,
@@ -89,11 +89,11 @@ getgenv().Config = {
             ["Pomegranate"]     = true,   -- $200K
             ["Pineapple"]       = true,   -- $250K
             ["Dragon Fruit"]    = true,   -- $500K
-            ["Poison Apple"]    = true,   -- $1M
+            ["Poison Apple"]    = false,   -- $1M
             ["Moon Bloom"]      = true,   -- $1M
-            ["Poison Ivy"]      = true,   -- $1M
+            ["Poison Ivy"]      = false,   -- $1M
             ["Ghost Pepper"]    = true,   -- $1M
-            ["Venus Fly Trap"]  = true,   -- $5M
+            ["Venus Fly Trap"]  = false,   -- $5M
             ["Dragon's Breath"] = true,   -- $10M
         },
     },
