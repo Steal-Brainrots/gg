@@ -48,6 +48,7 @@ getgenv().Config = {
     ["Plant Seed"] = {
         ["Enable"] = true,
         ["Seed"] = {
+			["Carrot"]          = true,   -- $1
             ["Bamboo"]          = true,   -- $10
             ["Blueberry"]       = true,   -- $25
             ["Tulip"]           = true,   -- $40
