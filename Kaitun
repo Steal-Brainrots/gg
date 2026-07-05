@@ -1,82 +1,105 @@
-script_key="oTALnmFjjSIMCVuwrMGmmyGerIskdYJT";
+script_key = "oTALnmFjjSIMCVuwrMGmmyGerIskdYJT";
 getgenv().GAG2 = {
     Fps = 5,
-    AutoBuySeed = true,
-    ["seed dont buy"] = {
-        -- "Tomato",
-    },
-    BuyGearShop = {
-        "Super Sprinkler","Super Watering Can","Legendary Sprinkler",
-    },
-    BuyGearMinSheckles = 50000000,
-    PlantSeeds = {
-    ["Bamboo"] = 200,
-    ["Cactus"] = 200, ["Pineapple"] = 200, ["Mushroom"] = 200, ["Green Bean"] = 200,
-    ["Banana"] = 200, ["Grape"] = 200, ["Coconut"] = 200, ["Mango"] = 200,
-},
-    DestroyPlants = {
-            },
-
-    BuyPets = {
-        ["Deer"] = 4,
-        ["Raccoon"] = math.huge,
-        ["Black Dragon"] = math.huge,
-        ["Ice Serpent"] = math.huge,
-    },
-    EquipPets = {
-        ["Deer"] = {Priority = 1},
-    },
-    SellPets = {
-        "Frog","Owl","Bunny",
-    },
-    UseWateringCans = {"Common Watering Can"},
-    UseSprinklers = {
-        "Common Sprinkler", "Uncommon Sprinkler", "Rare Sprinkler",
-    },
+    RamKickLimit = 6000,
+    ServerSpread = false,
+    UUID = "",
     CollectSeedPacks = true,
-    COLLECT_PLANT_IF_MUTATED = {"Mushroom"},
-    SellFruitMultiplier = {
-        ["Carrot"] = 1, ["Bamboo"] = 1.5, --[TargetName] = WaitMinMulti
+    AutoBuySeed = true,
+    PlantSeeds = {
+        ["Strawberry"] = 200, ["Blueberry"] = 200, ["Tulip"] = 200, ["Tomato"] = 200,
+        ["Apple"] = 200, ["Bamboo"] = 200, ["Corn"] = 200, ["Cactus"] = 200,
+        ["Pineapple"] = 200, ["Mushroom"] = 200, ["Green Bean"] = 200,
+        ["Banana"] = 200, ["Grape"] = 200, ["Coconut"] = 200, ["Mango"] = 200,
+        ["Rocket Pop"] = 200, ["Dragon Fruit"] = 200, ["Acorn"] = 200,
+        ["Cherry"] = 200, ["Sunflower"] = 200, ["Fire Fern"] = 200,
     },
-    BuyAuction = {
-        ["Common Egg"] = 10000000, --[TargetName] = WaitPriceForBuy
-    },
-    SeedInventoryLimit = {
-        ["Carrot"] = 100000000000,["Strawberry"] = 1,["Blueberry"] = 1,["Tulip"] = 1,["Tomato"] = 1,["Apple"] = 1,["Corn"] = 1,
-        ["Cactus"] = 1,["Pineapple"] = 1,["Green Bean"] = 1,["Banana"] = 1,["Grape"] = 1,["Coconut"] = 1,["Mango"] = 1,
-        ["Dragon Fruit"] = 1,["Acorn"] = 1,["Cherry"] = 1,["Sunflower"] = 1,
-    },
-    GearInventoryLimit = {
-        ["Common Sprinkler"] = 2,
-        ["Uncommon Sprinkler"] = 2,
-        ["Common Watering Can"] = 2,
-        ["Rare Sprinkler"] = 2,
-        ["Legendary Sprinkler"] = 2,
+    DestroyPlants = {
+        "Carrot","Strawberry","Blueberry","Tulip","Tomato","Apple","Bamboo","Corn",
+        "Cactus","Pineapple","Mushroom","Green Bean","Banana","Grape","Coconut",
+        "Mango","Rocket Pop","Dragon Fruit","Acorn","Cherry","Sunflower","Fire Fern",
     },
     DestroyUntilMinPlants = 380,
     LimitPlants = 400,
-    PlantOverLimit = {"Bamboo","Mushroom",},
     ExpandLimit = 3,
+    PlantOverLimit = {"Bamboo","Mushroom"},
+    COLLECT_PLANT_IF_MUTATED = {"Mushroom"},
+    SellFruitMultiplier = {
+        -- ["Carrot"] = 1, ["Bamboo"] = 1.5,
+    },
+
+    ["seed dont buy"] = {
+        "Venus Fly Trap","Pomegranate","Poison Apple","Venom Spitter","Moon Bloom",
+    },
+    SeedInventoryLimit = {
+        ["Strawberry"]=1,["Blueberry"]=1,["Tulip"]=1,["Tomato"]=1,["Apple"]=1,
+        ["Corn"]=1,["Cactus"]=1,["Pineapple"]=1,["Green Bean"]=1,["Banana"]=1,
+        ["Grape"]=1,["Coconut"]=1,["Mango"]=1,["Dragon Fruit"]=1,["Acorn"]=1,
+        ["Cherry"]=1,["Sunflower"]=1,["Fire Fern"]=1,["Rocket Pop"]=1,
+    },
+
+    BuyGearMinSheckles = 500000,
+    BuyGearShop = {
+        "Common Sprinkler","Uncommon Sprinkler","Common Watering Can",
+        "Rare Sprinkler","Super Sprinkler","Super Watering Can","Legendary Sprinkler",
+    },
+    UseWateringCans = {"Common Watering Can"},
+    UseSprinklers = {
+        "Common Sprinkler","Uncommon Sprinkler","Rare Sprinkler","Legendary Sprinkler",
+    },
+    GearInventoryLimit = {
+        ["Common Sprinkler"]=2,["Uncommon Sprinkler"]=2,
+        ["Common Watering Can"]=2,["Rare Sprinkler"]=2,
+        ["Legendary Sprinkler"]=2,
+    },
+
+    BuyCrateShop = {
+        -- "Light Crate", "Arch Crate",
+    },
+    CrateInventoryLimit = {
+        -- ["Light Crate"] = 5,
+    },
+
+    BuyAuction = {
+        ["Moon Bloom"]=80000000,
+        ["Hypno Bloom"]=100000000,
+        ["Dragon's Breath"]=100000000,
+        ["Super Watering Can"]=2000000,
+        ["Super Sprinkler"]=4000000,
+    },
+
     MaxPetSlots = 4,
+    BuyPets = {
+        ["Golden Dragonfly"]={ Huge=99, Rainbow=99},
+        ["Unicorn"]={ Huge=99, Rainbow=99},
+        ["Deer"]=4,
+        ["Raccoon"]=math.huge,
+        ["Black Dragon"]=math.huge,
+        ["Ice Serpent"]=math.huge,
+    },
+    EquipPets = {
+        ["Deer"]={Priority=1},
+    },
+    SellPets = {"Frog","Owl","Bunny"},
     MailReceivers = {"Dyake250"},
     MailSendItems = {
-        ["Unicorn"] = 1,
-        ["Raccoon"] = 1,---{ Amount = 1, To = {"account"} },
-        ["Black Dragon"] = 1,
-        ["Ice Serpent"] = 1,
-        ["Bear"] = "All",
-        ["Moon Bloom"] = "All",
-        ["Dragon's Breath"] = "All",
-        ["Rainbow"] = "All",
-        ["Super Sprinkler"] = "All",
-        ["Super Watering Can"] = "All",
-        ["Mega"] = "All",
+        --["Carrot"] = { Amount = 1, To = {"account"} },
+        ["Unicorn"]=1,
+        ["Raccoon"]=1,
+        ["Bear"]="All",
+        ["Moon Bloom"]="All",
+        ["Dragon's Breath"]="All",
+        ["Rainbow"]="All",
+        ["Super Sprinkler"]="All",
+        ["Super Watering Can"]="All",
+        ["Mega"]="All",
+        ["Hypno Bloom"]="All",
+        ["Carrot"]=500,
     },
+
     ShowUserWebhook = true,
     WebhookUrl = "",
     DiscordId = "",
-    ServerSpread = true,
-    UUID = "UUID in wed",
-    RamKickLimit = 6000,
 }
+
 loadstring(game:HttpGet("https://api.luarmor.net/files/v4/loaders/7f7baee1f0b7e01fe5ee8a3f5aabbfbf.lua"))()
