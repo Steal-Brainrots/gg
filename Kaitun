@@ -25,7 +25,7 @@ getgenv().GAG2 = {
     PlantOverLimit = {"Bamboo","Mushroom"},
     COLLECT_PLANT_IF_MUTATED = {"Mushroom"},
     SellFruitMultiplier = {
-        -- ["Carrot"] = 1
+        -- ["Carrot"] = 1,
     },
 
     ["seed dont buy"] = {
