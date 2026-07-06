@@ -31,7 +31,7 @@ getgenv().GAG2 = {
         "Venus Fly Trap","Pomegranate","Poison Apple","Venom Spitter",
     },
     SeedInventoryLimit = {
-        ["Strawberry"]=10,["Blueberry"]=10,["Tulip"]=10,["Tomato"]=10,["Apple"]=10,
+        ["Carrot"]=9999,["Strawberry"]=10,["Blueberry"]=10,["Tulip"]=10,["Tomato"]=10,["Apple"]=10,
         ["Corn"]=10,["Cactus"]=10,["Pineapple"]=10,["Green Bean"]=1,["Banana"]=1,
         ["Grape"]=1,["Coconut"]=1,["Mango"]=1,["Dragon Fruit"]=1,["Acorn"]=1,
         ["Cherry"]=1,["Sunflower"]=1,["Fire Fern"]=1,["Rocket Pop"]=1,
