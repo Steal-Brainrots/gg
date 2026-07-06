@@ -8,7 +8,7 @@ getgenv().GAG2 = {
     AutoBuySeed = true,
     PlantSeeds = {
         ["Carrot"] = 4, ["Strawberry"] = 20, ["Blueberry"] = 20, ["Tulip"] = 20, ["Tomato"] = 20,
-        ["Apple"] = 20, ["Bamboo"] = 20, ["Corn"] = 20, ["Cactus"] = 20,
+        ["Apple"] = 20, ["Bamboo"] = 200, ["Corn"] = 20, ["Cactus"] = 20,
         ["Pineapple"] = 20, ["Mushroom"] = 200, ["Green Bean"] = 20,
         ["Banana"] = 20, ["Grape"] = 20, ["Coconut"] = 20, ["Mango"] = 20,
         ["Rocket Pop"] = 1, ["Dragon Fruit"] = 20, ["Acorn"] = 20,
