@@ -64,7 +64,7 @@ getgenv().GAG2Config = {
     },
     BUY_AUCTION = {},  -- ["Item Name"] = { Max Sheckle Price, Buy Until Amount }
     BUY_CRATE = {},  -- ["Crate Name"] = Buy Until Amount
-    BUY_GEAR_MIN_SHECKLE = 10000000, 
+    BUY_GEAR_MIN_SHECKLE = 1000000, 
     BUY_GEAR = {  -- ["Gear Name"] = Buy Until Amount
         ["Super Watering Can"] = 9999,
         ["Super Sprinkler"] = 9999,
