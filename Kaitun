@@ -40,7 +40,6 @@ getgenv().GAG2Config = {
         ["Dragon Fruit"] = 4,
         ["Acorn"] = 4,
         ["Cherry"] = 4,
-        ["Sunflower"] = 4,
     },
 
     -- Buying Config
@@ -65,12 +64,6 @@ getgenv().GAG2Config = {
         ["Dragon Fruit"] = 1,
         ["Acorn"] = 3,
         ["Cherry"] = 1,
-        ["Sunflower"] = 1,
-        ["Fire Fern"] = 1,
-        ["Venus Fly Trap"] = 1,
-        ["Pomegranate"] = 1,
-        ["Poison Apple"] = 1,
-        ["Venom Spitter"] = 1,
         ["Moon Bloom"] = 1,
         ["Hypno Bloom"] = 1,
         ["Dragon's Breath"] = 9999,
