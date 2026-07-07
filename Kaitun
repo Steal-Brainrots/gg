@@ -8,10 +8,6 @@ getgenv().GAG2Config = {
     -- Pet Config
     MAX_PET_EQUIP = 6,
     BUY_PET = {  -- ["Pet Name"] = Buy Until Amount
-        ["BlackDragon"] = 99, 
-        ["Unicorn"] = 99,
-        ["Raccoon"] = 99, 
-        ["IceSerpent"] = 99,
 
         ["Deer"] = 5,
     },
