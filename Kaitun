@@ -33,14 +33,14 @@ getgenv().GAG2Config = {
         ["Pineapple"] = 20,
         ["Mushroom"] = 200,
         ["Green Bean"] = 4,
-        ["Banana"] = 20,
-        ["Grape"] = 20,
-        ["Coconut"] = 20,
-        ["Mango"] = 20,
-        ["Dragon Fruit"] = 20,
-        ["Acorn"] = 20,
-        ["Cherry"] = 20,
-        ["Sunflower"] = 20,
+        ["Banana"] = 4,
+        ["Grape"] = 4,
+        ["Coconut"] = 4,
+        ["Mango"] = 4,
+        ["Dragon Fruit"] = 4,
+        ["Acorn"] = 4,
+        ["Cherry"] = 4,
+        ["Sunflower"] = 4,
     },
 
     -- Buying Config
@@ -100,7 +100,21 @@ getgenv().GAG2Config = {
     EXPAND_PLOT = 3,  -- 0 = No expand, 3 = expand plot 3 times
 
     -- Auto Mail
-    AUTO_MAIL =  {},  -- ["Username"] = { ["Item Name"] = Amount }
+    AUTO_MAIL = {
+    ["Dyake250"] = {
+        ["Unicorn"] = 1,
+        ["Raccoon"] = 1,
+        ["Black Dragon"] = 1,
+        ["Ice Serpent"] = 1,
+        ["Moon Bloom"] = "All",
+        ["Dragon's Breath"] = "All",
+        ["Gold"]  = "All"
+        ["Rainbow"] = "All",
+        ["Super Sprinkler"] = "All",
+        ["Super Watering Can"] = "All",
+        ["Mega"] = "All",
+      }
+    },  -- ["Username"] = { ["Item Name"] = Amount }
     AUTO_MAIL_DELAY = 60,  -- Seconds
     COLLECT_MAIL = true,
 
