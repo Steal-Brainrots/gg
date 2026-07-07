@@ -101,12 +101,12 @@ getgenv().GAG2Config = {
         ["Ice Serpent"] = 1,
         ["Moon Bloom"] = "All",
         ["Dragon's Breath"] = "All",
-        ["Gold"]  = "All"
+        ["Gold"]  = "All", 
         ["Rainbow"] = "All",
         ["Super Sprinkler"] = "All",
         ["Super Watering Can"] = "All",
         ["Mega"] = "All",
-      },
+      }
     },  -- ["Username"] = { ["Item Name"] = Amount }
     AUTO_MAIL_DELAY = 60,  -- Seconds
     COLLECT_MAIL = true,
