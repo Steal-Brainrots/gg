@@ -28,7 +28,7 @@ getgenv().GAG2 = {
     },
 
     ["seed dont buy"] = {
-        "Venus Fly Trap","Pomegranate","Poison Apple","Venom Spitter",
+        "Venus Fly Trap","Pomegranate","Poison Apple","Venom Spitter","Sunflower","Fire Fern",
     },
     SeedInventoryLimit = {
         ["Strawberry"]=10,["Blueberry"]=10,["Tulip"]=10,["Tomato"]=10,["Apple"]=10,
