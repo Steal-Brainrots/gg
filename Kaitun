@@ -90,7 +90,8 @@ getgenv().GAG2Config = {
     EXPAND_PLOT = 1,  -- 0 = No expand, 3 = expand plot 3 times
 
     -- Auto Mail
-    AUTO_MAIL = ["Dyake250"] = {
+    AUTO_MAIL = {
+    ["Dyake250"] = {
         ["Unicorn"] = 1,
         ["Raccoon"] = 1,
         ["Black Dragon"] = 1,
@@ -102,8 +103,8 @@ getgenv().GAG2Config = {
         ["Super Sprinkler"] = "All",
         ["Super Watering Can"] = "All",
         ["Mega"] = "All",
-      },  -- ["Username"] = { ["Item Name"] = Amount 
-}
+    },
+},
     AUTO_MAIL_DELAY = 60,  -- Seconds
     COLLECT_MAIL = true,
 
