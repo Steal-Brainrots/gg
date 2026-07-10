@@ -90,7 +90,7 @@ getgenv().GAG2Config = {
     EXPAND_PLOT = 1,  -- 0 = No expand, 3 = expand plot 3 times
 
     -- Auto Mail
-    AUTO_MAIL = {["Dyake250"] = {
+    AUTO_MAIL = ["Dyake250"] = {
         ["Unicorn"] = 1,
         ["Raccoon"] = 1,
         ["Black Dragon"] = 1,
