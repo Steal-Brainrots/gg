@@ -7,11 +7,11 @@ getgenv().GAG2 = {
     CollectSeedPacks = true,
     AutoBuySeed = true,
     PlantSeeds = {
-        ["Carrot"] = 4, ["Strawberry"] = 20, ["Blueberry"] = 20, ["Tulip"] = 20, ["Tomato"] = 20,
+        ["Strawberry"] = 20, ["Blueberry"] = 20, ["Tulip"] = 20, ["Tomato"] = 20,
         ["Apple"] = 20, ["Bamboo"] = 200, ["Corn"] = 20, ["Cactus"] = 20,
         ["Pineapple"] = 20, ["Mushroom"] = 200, ["Green Bean"] = 20,
         ["Banana"] = 20, ["Grape"] = 20, ["Coconut"] = 20, ["Mango"] = 20,
-        ["Rocket Pop"] = 1, ["Dragon Fruit"] = 20, ["Acorn"] = 20,
+        ["Rocket Pop"] = 20, ["Dragon Fruit"] = 20, ["Acorn"] = 20,
         ["Cherry"] = 20,
     },
     DestroyPlants = {
@@ -23,16 +23,17 @@ getgenv().GAG2 = {
     LimitPlants = 450,
     ExpandLimit = 3,
     PlantOverLimit = {"Bamboo","Mushroom"},
-    COLLECT_PLANT_IF_MUTATED = {"Bamboo","Mushroom"},
+    COLLECT_PLANT_IF_MUTATED = {"Mushroom"},
     SellFruitMultiplier = {
+        -- ["Carrot"] = 1, ["Bamboo"] = 1.5,
     },
 
     ["seed dont buy"] = {
         "Venus Fly Trap","Pomegranate","Poison Apple","Venom Spitter","Sunflower","Fire Fern",
     },
     SeedInventoryLimit = {
-        ["Strawberry"]=10,["Blueberry"]=10,["Tulip"]=10,["Tomato"]=10,["Apple"]=10,
-        ["Corn"]=10,["Cactus"]=10,["Pineapple"]=10,["Green Bean"]=1,["Banana"]=1,
+        ["Strawberry"]=1,["Blueberry"]=1,["Tulip"]=1,["Tomato"]=1,["Apple"]=1,
+        ["Corn"]=1,["Cactus"]=1,["Pineapple"]=1,["Green Bean"]=1,["Banana"]=1,
         ["Grape"]=1,["Coconut"]=1,["Mango"]=1,["Dragon Fruit"]=1,["Acorn"]=1,
         ["Cherry"]=1,["Sunflower"]=1,["Fire Fern"]=1,["Rocket Pop"]=1,
     },
@@ -43,7 +44,7 @@ getgenv().GAG2 = {
     },
     UseWateringCans = {"Common Watering Can"},
     UseSprinklers = {
-        "Common Sprinkler","Uncommon Sprinkler","Rare Sprinkler",
+        "Common Sprinkler","Uncommon Sprinkler","Rare Sprinkler","Legendary Sprinkler",
     },
     GearInventoryLimit = {
         ["Common Sprinkler"]=2,["Uncommon Sprinkler"]=2,
@@ -56,7 +57,13 @@ getgenv().GAG2 = {
     CrateInventoryLimit = {
     },
 
-    BuyAuction = {},
+    BuyAuction = {
+        ["Moon Bloom"]=80000000,
+        ["Hypno Bloom"]=100000000,
+        ["Dragon's Breath"]=100000000,
+        ["Super Watering Can"]=2000000,
+        ["Super Sprinkler"]=4000000,
+    },
 
     MaxPetSlots = 4,
     BuyPets = {
@@ -78,7 +85,6 @@ getgenv().GAG2 = {
         ["Moon Bloom"]="All",
         ["Dragon's Breath"]="All",
         ["Rainbow"]="All",
-        ["Gold"]= "All",
         ["Super Sprinkler"]="All",
         ["Super Watering Can"]="All",
         ["Mega"]="All",
