@@ -104,7 +104,7 @@ getgenv().GAG2Config = {
         ["Super Watering Can"] = "All",
         ["Mega"] = "All",
     },
-}
+},
     AUTO_MAIL_DELAY = 60,  -- Seconds
     COLLECT_MAIL = true,
 
