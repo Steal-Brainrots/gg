@@ -30,9 +30,8 @@ getgenv().GAG2 = {
     SellPets = {
         "Frog","Owl","Bunny",
     },
-    UseWateringCans = {"Common Watering Can"},
+    UseWateringCans = {},
     UseSprinklers = {
-        "Common Sprinkler", "Uncommon Sprinkler", "Rare Sprinkler",
     },
     CollectSeedPacks = true,
     COLLECT_PLANT_IF_MUTATED = {"Mushroom"},
