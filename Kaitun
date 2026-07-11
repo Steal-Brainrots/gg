@@ -89,4 +89,4 @@ getgenv().GAG2 = {
     UUID = "",
     RamKickLimit = 6000,
 }
-loadstring(game:HttpGet("https://api.luarmor.net/files/v4/loaders/7f7baee1f0b7e01fe5ee8a3f5aabbfbf.lua"))()
+loadstring(game:HttpGet("https://api.luarmor.net/files/v4/loaders/840481889ecf224a4f032e16c20f568d.lua"))()
