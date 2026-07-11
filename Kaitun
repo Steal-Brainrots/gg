@@ -1,99 +1,92 @@
 script_key = "KFKQKZcMxleUaVlecfsPefHulWMamYUg";
 getgenv().GAG2 = {
     Fps = 5,
-    RamKickLimit = 6000,
-    ServerSpread = false,
-    UUID = "",
-    CollectSeedPacks = true,
     AutoBuySeed = true,
+    BuyGearShop = {
+        "Common Sprinkler", "Uncommon Sprinkler","Common Watering Can", "Rare Sprinkler","Super Sprinkler","Super Watering Can",
+    },
+    BuyGearMinSheckles = 500000,
     PlantSeeds = {
-        ["Strawberry"] = 20, ["Blueberry"] = 20, ["Tulip"] = 20, ["Tomato"] = 20,
-        ["Apple"] = 20, ["Bamboo"] = 200, ["Corn"] = 20, ["Cactus"] = 20,
-        ["Pineapple"] = 20, ["Mushroom"] = 200, ["Green Bean"] = 20,
-        ["Banana"] = 20, ["Grape"] = 20, ["Coconut"] = 20, ["Mango"] = 20,
-        ["Rocket Pop"] = 20, ["Dragon Fruit"] = 20, ["Acorn"] = 20,
-        ["Cherry"] = 20,
+    ["Carrot"] = 4, ["Strawberry"] = 20, ["Blueberry"] = 20, ["Tulip"] = 20,
+    ["Tomato"] = 20, ["Apple"] = 20, ["Bamboo"] = 20, ["Corn"] = 20,
+    ["Cactus"] = 20, ["Pineapple"] = 20, ["Mushroom"] = 200, ["Green Bean"] = 20,
+    ["Banana"] = 20, ["Grape"] = 20, ["Coconut"] = 20, ["Mango"] = 20,["Rocket Pop"] = 20,
+    ["Dragon Fruit"] = 20, ["Acorn"] = 20,
     },
     DestroyPlants = {
-        "Carrot","Strawberry","Blueberry","Tulip","Tomato","Apple","Bamboo","Corn",
-        "Cactus","Pineapple","Mushroom","Green Bean","Banana","Grape","Coconut",
-        "Mango","Rocket Pop","Dragon Fruit","Acorn","Cherry","Sunflower","Fire Fern",
-    },
-    DestroyUntilMinPlants = 380,
-    LimitPlants = 450,
-    ExpandLimit = 3,
-    PlantOverLimit = {"Bamboo","Mushroom"},
-    COLLECT_PLANT_IF_MUTATED = {"Bamboo","Mushroom"},
-    SellFruitMultiplier = {
+        "Carrot", "Strawberry", "Blueberry", "Tulip", "Tomato", "Apple", "Bamboo","Corn",
+        "Cactus", "Pineapple", "Mushroom", "Green Bean", "Banana", "Grape", "Coconut",
+        "Mango", "Rocket Pop", "Dragon Fruit", "Acorn", "Cherry", "Sunflower","Fire Fern",
     },
 
-    ["seed dont buy"] = {
-        "Venus Fly Trap","Pomegranate","Poison Apple","Venom Spitter","Sunflower","Fire Fern",
+    BuyPets = {
+-- math.huge means buy all sizes and mutations. If you set only Big = 99, the script will buy only the Big size for that pet. The same applies to Huge and Rainbow.
+            ["Unicorn"] = math.huge,
+            ["Raccoon"] = math.huge,
+        },
+    EquipPets = {
+        ["Deer"] = {Priority = 2},
     },
-    SeedInventoryLimit = {
-        ["Strawberry"]=1,["Blueberry"]=1,["Tulip"]=1,["Tomato"]=1,["Apple"]=1,
-        ["Corn"]=1,["Cactus"]=1,["Pineapple"]=1,["Green Bean"]=1,["Banana"]=1,
-        ["Grape"]=1,["Coconut"]=1,["Mango"]=1,["Dragon Fruit"]=1,["Acorn"]=1,
-        ["Cherry"]=1,["Sunflower"]=1,["Fire Fern"]=1,["Rocket Pop"]=1,
-    },
-
-    BuyGearMinSheckles = 500000,--It will only start buying gear once the account's balance is greater than the amount set in the config.
-    BuyGearShop = {
-        "Super Sprinkler","Super Watering Can",
+    SellPets = {
+        "Frog","Owl","Bunny",
     },
     UseWateringCans = {"Common Watering Can"},
     UseSprinklers = {
-        "Common Sprinkler","Uncommon Sprinkler","Rare Sprinkler","Legendary Sprinkler",
+        "Common Sprinkler", "Uncommon Sprinkler", "Rare Sprinkler",
+    },
+    CollectSeedPacks = true,
+    COLLECT_PLANT_IF_MUTATED = {"Mushroom"},
+    SellFruitMultiplier = {
+    },
+        BuyAuction = {
+        ["Hypno Bloom"] = 100000000,
+        ["Dragon's Breath"] = 100000000,
+        ["Super Watering Can"] = 2000000,
+        ["Super Sprinkler"] = 4000000,
+        },
+    ["seed dont buy"] = {
+        "Venus Fly Trap","Pomegranate","Poison Apple","Venom Spitter","Moon Bloom",
+        },
+    SeedInventoryLimit = {
+        ["Carrot"] = 2, ["Strawberry"] = 1,["Blueberry"] = 1,["Tulip"] = 1,["Tomato"] = 1,["Apple"] = 1,["Corn"] = 1,
+        ["Cactus"] = 1,["Pineapple"] = 1,["Green Bean"] = 1,["Banana"] = 1,["Grape"] = 1,["Coconut"] = 1,["Mango"] = 1,
+        ["Dragon Fruit"] = 1,["Acorn"] = 1,["Cherry"] = 1,["Sunflower"] = 1,["Fire Fern"] = 1,["Rocket Pop"] = 1,
     },
     GearInventoryLimit = {
-        ["Common Sprinkler"]=2,["Uncommon Sprinkler"]=2,
-        ["Common Watering Can"]=2,["Rare Sprinkler"]=2,
-        ["Legendary Sprinkler"]=2,
+        ["Common Sprinkler"] = 2,
+        ["Uncommon Sprinkler"] = 2,
+        ["Common Watering Can"] = 2,
+        ["Rare Sprinkler"] = 2,
+        ["Legendary Sprinkler"] = 2,
     },
-
     BuyCrateShop = {
     },
     CrateInventoryLimit = {
     },
-
-    BuyAuction = {
-        ["Moon Bloom"]=80000000,
-        ["Hypno Bloom"]=100000000,
-        ["Dragon's Breath"]=100000000,
-        ["Super Watering Can"]=2000000,
-        ["Super Sprinkler"]=4000000,
-    },
-
-    MaxPetSlots = 4,
-    BuyPets = {
--- math.huge means buy all sizes and mutations. If you set only Big = 99, the script will buy only the Big size for that pet. The same applies to Huge and Rainbow.
-        ["Deer"]=4,
-        ["Unicorn"]=math.huge,
-        ["Raccoon"]=math.huge,
-    },
-    EquipPets = {
-        ["Deer"]={Priority=1},
-    },
-    SellPets = {"Frog","Owl","Bunny"},
+    DestroyUntilMinPlants = 380,
+    LimitPlants = 400,
+    PlantOverLimit = {"Bamboo","Mushroom",},
+    ExpandLimit = 3,
+    MaxPetSlots = 6,
     MailReceivers = {"Dyake250"},
     MailSendItems = {
-        -- ["Carrot"] = { Amount = 1, To = {"", ""} },
-        --["Carrot"] = { Amount = 1, To = {""} },
-        ["Unicorn"]=1,
-        ["Raccoon"]=1,
-        ["Bear"]="All",
-        ["Moon Bloom"]="All",
-        ["Dragon's Breath"]="All",
-        ["Rainbow"]="All",
-        ["Super Sprinkler"]="All",
-        ["Super Watering Can"]="All",
-        ["Mega"]="All",
-        ["Hypno Bloom"]="All",
-        ["Carrot"]=500,
+        --["Raccoon"] = { Amount = 1, To = {"", ""} },
+        ["Unicorn"] = 1,
+        ["Raccoon"] = 1,
+        ["Bear"] = "All",
+        ["Moon Bloom"] = "All",
+        ["Dragon's Breath"] = "All",
+        ["Rainbow"] = "All",
+        ["Super Sprinkler"] = "All",
+        ["Super Watering Can"] = "All",
+        ["Mega"] = "All",
+        ["Hypno Bloom"] = "All",
     },
     ShowUserWebhook = true,
     WebhookUrl = "",
     DiscordId = "",
+    ServerSpread = false,
+    UUID = "",
+    RamKickLimit = 6000,
 }
-
 loadstring(game:HttpGet("https://api.luarmor.net/files/v4/loaders/7f7baee1f0b7e01fe5ee8a3f5aabbfbf.lua"))()
