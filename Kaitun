@@ -1,4 +1,3 @@
-
 script_key = "KFKQKZcMxleUaVlecfsPefHulWMamYUg";
 getgenv().GAG2 = {
     Fps = 5,
