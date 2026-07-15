@@ -60,7 +60,6 @@ getgenv().GAG2Config = {
         ["Dragon Fruit"] = 1,
         ["Acorn"] = 3,
         ["Cherry"] = 1,
-        ["Dragon's Breath"] = 9999,
         ["Star Fruit"] = 9999,
     },
 
