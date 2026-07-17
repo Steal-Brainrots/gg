@@ -31,8 +31,8 @@ getgenv().GAG2Config = {
         ["Mushroom"] = 200,
         ["Green Bean"] = 4,
         ["Banana"] = 1,
-        ["Grape"] = 1,
-        ["Coconut"] = 1,
+        ["Grape"] = 10,
+        ["Coconut"] = 10,
         ["Mango"] = 10,
         ["Dragon Fruit"] = 10,
         ["Acorn"] = 10,
@@ -103,7 +103,7 @@ getgenv().GAG2Config = {
 
     -- Other Config
     COLLECT_PLANT_IF_MUTATED = {
-        "Mushroom",
+        "Mushroom","Bamboo",
     },  -- Only Collect Fruit When It Has ANY Mutation
 
     FAVOURITE_FRUIT = {},  -- ["Fruit Name"] = {} or ["Fruit Name"] = {"Gold", "Rainbow"}
