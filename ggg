@@ -1,143 +1,137 @@
-getgenv().Config = {
-    ["Max Plant Fruit"] = 300,
-    ["Buy Expand Plot"] = true,
-	["Buy Slot Pet"] = false,
-    ["Pet"] = {
-        ["Auto Buy"] = {
-            ["Enable"] = false,
-            ["Pet"] = {
-                ["IceSerpent"]      = true,   -- $20M
-                ["Raccoon"]         = true,   -- $5M
-                ["Unicorn"]         = true,   -- $4M
-                ["GoldenDragonfly"] = true,   -- $3M
-                ["BlackDragon"]     = true,   -- $1M
-                ["Monkey"]          = true,   -- $1M
-                ["Bee"]             = false,   -- $1M
-                ["Robin"]           = false,   -- $75K
-                ["Deer"]            = false,  -- $50K
-                ["Owl"]             = false,  -- $25K
-                ["Bunny"]           = false,  -- $20K
-                ["Frog"]            = false,  -- $10K
-            },
-        },
-    },
-    ["Mail"] = {
-        ["Enable"]      = false,
-        ["Username"]    = "",
-        ["Note"]        = "auto-shipped from main",
-        ["IntervalSec"] = 30,
-        ["Pet"] = {
-            ["IceSerpent"]      = false,
-            ["Raccoon"]         = false,
-            ["Unicorn"]         = false,
-            ["GoldenDragonfly"] = false,
-            ["BlackDragon"]     = false,
-            ["Monkey"]          = false,
-            ["Bee"]             = false,
-            ["Robin"]           = false,
-            ["Deer"]            = false,
-            ["Owl"]             = false,
-            ["Bunny"]           = false,
-            ["Frog"]            = false,
-        },
-        ["Seed"] = {
-            ["Rainbow"] = false,
-            ["Gold"]    = false,
-        },
-    },
-    ["Plant Seed"] = {
-        ["Enable"] = true,
-        ["Seed"] = {
-			["Carrot"]          = true,   -- $1
-            ["Bamboo"]          = true,   -- $10
-            ["Blueberry"]       = true,   -- $25
-            ["Tulip"]           = true,   -- $40
-            ["Apple"]           = true,   -- $50
-            ["Tomato"]          = true,   -- $200
-            ["Banana"]          = true,   -- $1K
-            ["Sunflower"]       = true,   -- $1K
-            ["Corn"]            = true,   -- $2.5K
-            ["Mushroom"]        = true,   -- $15K
-            ["Cherry"]          = true,   -- $30K
-            ["Mango"]           = true,   -- $35K
-            ["Grape"]           = true,   -- $50K
-            ["Coconut"]         = true,   -- $70K
-            ["Cactus"]          = true,   -- $100K
-            ["Baby Cactus"]     = true,   -- $100K
-            ["Pomegranate"]     = true,   -- $200K
-            ["Pineapple"]       = true,   -- $250K
-            ["Dragon Fruit"]    = true,   -- $500K
-        },
-    },
-    ["Buy Seed"] = {
-        ["Enable"] = true,
-        ["Seed"] = {
-            ["Carrot"]          = true,   -- $1
-            ["Bamboo"]          = true,   -- $10
-            ["Blueberry"]       = true,   -- $25
-            ["Tulip"]           = true,   -- $40
-            ["Apple"]           = true,   -- $50
-            ["Tomato"]          = true,   -- $200
-            ["Banana"]          = true,   -- $1K
-            ["Sunflower"]       = true,   -- $1K
-            ["Corn"]            = true,   -- $2.5K
-            ["Mushroom"]        = true,   -- $15K
-            ["Cherry"]          = true,   -- $30K
-            ["Mango"]           = true,   -- $35K
-            ["Grape"]           = true,   -- $50K
-            ["Coconut"]         = true,   -- $70K
-            ["Cactus"]          = true,   -- $100K
-            ["Baby Cactus"]     = true,   -- $100K
-            ["Pomegranate"]     = true,   -- $200K
-            ["Pineapple"]       = true,   -- $250K
-            ["Dragon Fruit"]    = true,   -- $500K
-            ["Poison Apple"]    = false,   -- $1M
-            ["Moon Bloom"]      = true,   -- $1M
-            ["Poison Ivy"]      = false,   -- $1M
-            ["Ghost Pepper"]    = true,   -- $1M
-            ["Venus Fly Trap"]  = false,   -- $5M
-            ["Dragon's Breath"] = true,   -- $10M
-        },
-    },
-    
-    ["Buy Gear"] = {
-        ["Enable"] = false,
-        ["Gear"] = {
-            ["Common Watering Can"]  = false,   -- $2K
-            ["Super Watering Can"]   = true,   -- $250K
-            ["Common Sprinkler"]     = false,   -- $3K
-            ["Uncommon Sprinkler"]   = false,   -- $10K
-            ["Rare Sprinkler"]       = false,   -- $50K
-            ["Legendary Sprinkler"]  = true,   -- $100K
-            ["Super Sprinkler"]      = true,   -- $300K
-        },
-    },
-    ["Auto Water"] = {
-        ["Enable"] = false,
-    },
-    ["Auto Sprinkler"] = {
-        ["Enable"] = false,
+script_key = "XnCvQjvfEIgkcoLxLAubvnXlDccHtuvA";
+getgenv().GAG2Config = {
+    FPS_CAP = 5,  -- MUST USE 5+ FPS
+    ADD_FRIEND = false,
+    AUTO_UPDATE_RESTART = true,
+    COLLECT_FRUIT_DELAY = 20,
+
+    -- Pet Config
+    MAX_PET_EQUIP = 6,
+    BUY_PET = {  -- ["Pet Name"] = Buy Until Amount
+                ["Deer"] = 5,
     },
 
-    ["Webhook"] = {
-        ["Enable"]            = false,
-        ["URL"]               = "",      -- https://discord.com/api/webhooks/...
-        ["Username"]          = "OneClick GAG2",
-        ["OnRarePet"]         = true,    -- ping when a rare pet is tamed
-        ["OnRareSeed"]        = true,    -- ping when Rainbow/Gold seed claimed
-        ["PetMinPrice"]       = 0,       -- only notify pets with BasePrice >= this
-        ["PetRarity"] = {                -- which rarities trigger pet notify
-            ["Common"]    = false,
-            ["Uncommon"]  = false,
-            ["Rare"]      = false,
-            ["Legendary"] = true,
-            ["Mythic"]    = true,
-            ["Super"]     = true,
-            ["Divine"]    = true,
-            ["Prismatic"] = true,
-        },
-        ["ProfileReport"]     = false,   -- send periodic profile summary
-        ["ProfileIntervalMin"]= 30,      -- minutes between profile reports
+    EQUIP_PET = {  -- {"Pet Name", Amount to Equip, Priority}
+        {"Deer", 6, 4},
     },
+
+    -- Plant Config
+    PLANT_SEED = {  -- ["Seed Name"] = Plant Until Amount
+        ["Carrot"] = 4,
+        ["Strawberry"] = 20,
+        ["Blueberry"] = 20,
+        ["Tulip"] = 4,
+        ["Tomato"] = 20,
+        ["Apple"] = 20,
+        ["Bamboo"] = 100,
+        ["Corn"] = 20,
+        ["Cactus"] = 20,
+        ["Pineapple"] = 20,
+        ["Mushroom"] = 200,
+        ["Green Bean"] = 20,
+        ["Banana"] = 20,
+        ["Grape"] = 20,
+        ["Coconut"] = 20,
+        ["Mango"] = 20,
+        ["Dragon Fruit"] = 20,
+        ["Acorn"] = 20,
+        ["Cherry"] = 20,
+      },
+
+    -- Buy Config
+    BUY_SEED = {  -- ["Seed Name"] = Buy Until Amount
+        ["Rocket Pop"] = 9999,
+        ["Carrot"] = 5,
+        ["Strawberry"] = 5,
+        ["Blueberry"] = 5,
+        ["Tulip"] = 5,
+        ["Tomato"] = 5,
+        ["Apple"] = 5,
+        ["Bamboo"] = 9999,
+        ["Corn"] = 1,
+        ["Cactus"] = 2,
+        ["Pineapple"] = 3,
+        ["Mushroom"] = 9999,
+        ["Green Bean"] = 2,
+        ["Banana"] = 1,
+        ["Grape"] = 1,
+        ["Coconut"] = 1,
+        ["Mango"] = 1,
+        ["Dragon Fruit"] = 1,
+        ["Acorn"] = 3,
+        ["Cherry"] = 1,
+        ["Star Fruit"] = 9999,
+    },
+
+    BUY_AUCTION = {},  -- ["Item Name"] = {Maximum Sheckle Price, Buy Until Amount}
+    BUY_CRATE = {},  -- ["Crate Name"] = Buy Until Amount
+
+    BUY_GEAR_MIN_SHECKLE = 1000000,
+    BUY_GEAR = {  -- ["Gear Name"] = Buy Until Amount
+        ["Super Watering Can"] = 9999,
+        ["Super Sprinkler"] = 9999,
+    },
+
+    -- Sell Config
+    SELL_FRUIT_MULTIPLIER = {
+    },
+
+    SELL_ALL_DAILY_DEAL = 1000000,  -- Minimum Value to Trigger Daily "Sell All"
+    SELL_ALL_DELAY = 20,  -- Seconds
+
+    -- Consumable Config
+    USE_SPRINKLER = {},  -- "Sprinkler Name" (Only One Sprinkler Can Be Used at a Time)
+    USE_WATERING_CAN = {},  -- "Watering Can Name"
+    USE_WATERING_CAN_DELAY = 60,  -- Seconds
+
+    -- Other Config
+    COLLECT_PLANT_IF_MUTATED = {
+        "Bamboo",
+        "Mushroom",
+    },  -- Only Collect Fruit When It Has ANY Mutation
+
+    FAVOURITE_FRUIT = {},  -- ["Fruit Name"] = {} or ["Fruit Name"] = {"Gold", "Rainbow"}
+
+    FOCUS_COLLECT_DROPPED_SEED = false,
+    -- Set true for Public Servers to Collect Immediately
+    -- Set false to Collect Slightly Slower
+
+    EXPAND_PLOT = 1,  -- 0 = Do Not Expand, 3 = Expand Plot 3 Times
+
+    -- Auto Mail Config
+    AUTO_MAIL = {
+        ["Dyake250"] = {
+        ["Unicorn"] = 1,
+        ["Raccoon"] = 1,
+        ["Black Dragon"] = 1,
+        ["Ice Serpent"] = 1,
+        ["Hypno Bloom"] = "All",
+        ["Moon Bloom"] = "All",
+        ["Dragon's Breath"] = "All",
+        ["Rainbow"] = "All",
+        ["Super Sprinkler"] = "All",
+        ["Super Watering Can"] = "All",
+        ["Mega"] = "All",
+      },  -- ["Username"] = { ["Item Name"] = Amount 
+},
+    AUTO_MAIL_DELAY = 60,  -- Seconds
+    COLLECT_MAIL = true,
+
+    -- Discord Config
+    WEBHOOK_PET_NAME = {},
+    WEBHOOK_PET_RARITY = {
+        "Mythic",
+        "Super",
+        "Secret",
+    },
+
+    WEBHOOK_URL = "",
+    DISCORD_ID = "",
+    WEBHOOK_NOTE = "",  -- Personal Webhook
+
+    SHOW_PUBLIC_DISCORD_ID = true,
+    SHOW_WEBHOOK_USERNAME = true,  -- Personal Webhook
+    SHOW_WEBHOOK_JOBID = true,  -- Personal Webhook
 }
-loadstring(game:HttpGet('https://raw.githubusercontent.com/x2RunE/paid_script_cracked/refs/heads/main/banana-cat/gag2kaitunLoader.lua'))()
+
+loadstring(game:HttpGet("https://api.luarmor.net/files/v4/loaders/c9ea3aa6c782de82dee4bcf6b9a9d03e.lua"))()
