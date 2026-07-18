@@ -38,11 +38,7 @@ getgenv().GAG2Config = {
         ["Acorn"] = 10,
         ["Cherry"] = 10,
         ["Sunflower"] = 10,
-        ["Venus Fly Trap"] = 10,
-        ["Pomegranate"] = 10,
-        ["Poison Apple"] = 10,
-        ["Venom Spitter"] = 10,
-        ["Moon Bloom"] = 10,
+        ["Fire Fern"] = 1,
     },
 
     -- Buy Config
@@ -67,14 +63,6 @@ getgenv().GAG2Config = {
         ["Dragon Fruit"] = 1,
         ["Acorn"] = 3,
         ["Cherry"] = 1,
-        ["Sunflower"] = 1,
-        ["Fire Fern"] = 1,
-        ["Venus Fly Trap"] = 1,
-        ["Pomegranate"] = 1,
-        ["Poison Apple"] = 1,
-        ["Venom Spitter"] = 1,
-        ["Moon Bloom"] = 1,
-        ["Sun Bloom"] = 1,
         ["Star Fruit"] = 9999,
     },
 
