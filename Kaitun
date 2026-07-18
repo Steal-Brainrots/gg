@@ -78,7 +78,8 @@ getgenv().GAG2Config = {
     },
 
     -- Sell Config
-    SELL_FRUIT_MULTIPLIER = {  
+    SELL_FRUIT_MULTIPLIER = { 
+        ["Mushroom"] = 4,
     },
 
     SELL_ALL_DAILY_DEAL = 1000000,  -- Minimum Value to Trigger Daily "Sell All"
