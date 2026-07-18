@@ -24,7 +24,6 @@ getgenv().GAG2Config = {
         ["Tulip"] = 1,
         ["Tomato"] = 20,
         ["Apple"] = 20,
-        ["Bamboo"] = 100,
         ["Corn"] = 20,
         ["Cactus"] = 20,
         ["Pineapple"] = 20,
