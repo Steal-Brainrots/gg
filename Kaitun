@@ -19,25 +19,6 @@ getgenv().GAG2Config = {
     -- Plant Config
     PLANT_SEED = {  -- ["Seed Name"] = Plant Until Amount
         ["Carrot"] = 1,
-        ["Strawberry"] = 1,
-        ["Blueberry"] = 1,
-        ["Tulip"] = 1,
-        ["Tomato"] = 20,
-        ["Apple"] = 20,
-        ["Corn"] = 20,
-        ["Cactus"] = 20,
-        ["Pineapple"] = 20,
-        ["Mushroom"] = 200,
-        ["Green Bean"] = 4,
-        ["Banana"] = 20,
-        ["Grape"] = 10,
-        ["Coconut"] = 10,
-        ["Mango"] = 10,
-        ["Dragon Fruit"] = 10,
-        ["Acorn"] = 10,
-        ["Cherry"] = 10,
-        ["Sunflower"] = 10,
-        ["Fire Fern"] = 1,
     },
 
     -- Buy Config
@@ -78,7 +59,6 @@ getgenv().GAG2Config = {
 
     -- Sell Config
     SELL_FRUIT_MULTIPLIER = { 
-        ["Mushroom"] = 4,
     },
 
     SELL_ALL_DAILY_DEAL = 1000000,  -- Minimum Value to Trigger Daily "Sell All"
@@ -91,7 +71,6 @@ getgenv().GAG2Config = {
 
     -- Other Config
     COLLECT_PLANT_IF_MUTATED = {
-        "Mushroom",
     },  -- Only Collect Fruit When It Has ANY Mutation
 
     FAVOURITE_FRUIT = {},  -- ["Fruit Name"] = {} or ["Fruit Name"] = {"Gold", "Rainbow"}
