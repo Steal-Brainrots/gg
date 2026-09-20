@@ -1,0 +1,1035 @@
+--// Gem Ore Miner GUI by SubJohn505
+--// Loading splash + Diamond toggle + Ore ESP + Farm
+
+task.spawn(function()
+
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService     = game:GetService("TweenService")
+local Workspace        = game:GetService("Workspace")
+local HttpService      = game:GetService("HttpService")
+
+local player = Players.LocalPlayer
+
+local BRAND_OWNER = "SubJohn505"
+local BRAND_TITLE = "Gem Ore Miner"
+local BRAND_LOGO  = "rbxassetid://0"
+local BRAND_COLOR = Color3.fromRGB(0, 225, 255)
+local BRAND_ACCENT= Color3.fromRGB(180, 120, 255)
+
+local InstancingCmds, AutoMineCmds, Network, NotificationCmds
+local ToolUtil, ToolCmds, BlockWorldClient, BlocksTypes
+
+local function loadModules()
+    local ok1, m1 = pcall(function() return require(game.ReplicatedStorage.Library.Client.InstancingCmds) end)
+    local ok2, m2 = pcall(function() return require(game.ReplicatedStorage.Library.Client.AutoMineCmds) end)
+    local ok3, m3 = pcall(function() return require(game.ReplicatedStorage.Library.Client.Network) end)
+    local ok4, m4 = pcall(function() return require(game.ReplicatedStorage.Library.Client.NotificationCmds) end)
+    local ok5, m5 = pcall(function() return require(game.ReplicatedStorage.Library.Util.ToolUtil) end)
+    local ok6, m6 = pcall(function() return require(game.ReplicatedStorage.Library.Client.ToolCmds) end)
+    local ok7, m7 = pcall(function() return require(game.ReplicatedStorage.Library.Client.ToolCmds.BlockWorldClient) end)
+    local ok8, m8 = pcall(function() return require(game.ReplicatedStorage.Library.Types.Blocks) end)
+    if ok1 then InstancingCmds   = m1 end
+    if ok2 then AutoMineCmds     = m2 end
+    if ok3 then Network          = m3 end
+    if ok4 then NotificationCmds = m4 end
+    if ok5 then ToolUtil         = m5 end
+    if ok6 then ToolCmds         = m6 end
+    if ok7 then BlockWorldClient = m7 end
+    if ok8 then BlocksTypes      = m8 end
+    return InstancingCmds ~= nil and AutoMineCmds ~= nil and Network ~= nil
+end
+
+local CONFIG_FILENAME = "orefarm_config.json"
+local hasFileIO = (type(writefile) == "function")
+    and (type(readfile) == "function")
+    and (type(isfile) == "function")
+
+local BLOCKWORLDS_PATH = {"__THINGS", "BlockWorlds"}
+local SCAN_INTERVAL = 0.5
+local SHOW_BILLBOARD = true
+local BILLBOARD_MAX_DISTANCE = 5000
+local ORE_ATTRIBUTE = "id"
+
+local IGNORE_IDS = {
+    ["sand"] = true, ["dirt"] = true, ["stone"] = true, ["bedrock"] = true,
+    ["gold"] = true, ["wood"] = true, ["leaves"] = true,
+}
+
+local ORE_TYPES = {
+    ["moonstone"]  = { tier="Ore 1 | Sapphire", color=Color3.fromRGB(0,120,255), oreKey="sapphire" },
+    ["sapphire"]   = { tier="Ore 1 | Sapphire", color=Color3.fromRGB(0,120,255), oreKey="sapphire" },
+    ["star ruby"]  = { tier="Ore 2 | Ruby",     color=Color3.fromRGB(255,30,60), oreKey="ruby" },
+    ["star_ruby"]  = { tier="Ore 2 | Ruby",     color=Color3.fromRGB(255,30,60), oreKey="ruby" },
+    ["starruby"]   = { tier="Ore 2 | Ruby",     color=Color3.fromRGB(255,30,60), oreKey="ruby" },
+    ["ruby"]       = { tier="Ore 2 | Ruby",     color=Color3.fromRGB(255,30,60), oreKey="ruby" },
+    ["helium-3"]   = { tier="Ore 3 | Emerald",  color=Color3.fromRGB(0,220,120), oreKey="emerald" },
+    ["helium_3"]   = { tier="Ore 3 | Emerald",  color=Color3.fromRGB(0,220,120), oreKey="emerald" },
+    ["helium3"]    = { tier="Ore 3 | Emerald",  color=Color3.fromRGB(0,220,120), oreKey="emerald" },
+    ["emerald"]    = { tier="Ore 3 | Emerald",  color=Color3.fromRGB(0,220,120), oreKey="emerald" },
+    ["nebulite"]   = { tier="Ore 4 | Amethyst", color=Color3.fromRGB(170,80,255), oreKey="amethyst" },
+    ["amethyst"]   = { tier="Ore 4 | Amethyst", color=Color3.fromRGB(170,80,255), oreKey="amethyst" },
+    ["dark matter"]= { tier="Ore 5 | Rainbow",  color=Color3.fromRGB(255,255,255), oreKey="rainbow" },
+    ["dark_matter"]= { tier="Ore 5 | Rainbow",  color=Color3.fromRGB(255,255,255), oreKey="rainbow" },
+    ["darkmatter"] = { tier="Ore 5 | Rainbow",  color=Color3.fromRGB(255,255,255), oreKey="rainbow" },
+    ["rainbow"]    = { tier="Ore 5 | Rainbow",  color=Color3.fromRGB(255,255,255), oreKey="rainbow" },
+}
+
+local ZONES = {
+    {key="zone1", name="Moon Base",       teleportName="1", color=Color3.fromRGB(150,150,170)},
+    {key="zone2", name="Asteroid Belt",   teleportName="2", color=Color3.fromRGB(180,130,90)},
+    {key="zone3", name="Comet Ice",       teleportName="3", color=Color3.fromRGB(120,200,230)},
+    {key="zone4", name="Nebula Depths",   teleportName="4", color=Color3.fromRGB(140,80,200)},
+    {key="zone5", name="Black Hole Core", teleportName="5", color=Color3.fromRGB(60,0,80)},
+}
+
+local foundOres         = {}
+local selectedOres      = {}
+local selectedZones     = {}
+local farming           = false
+local farmThread        = nil
+local activeZoneKey     = nil
+local currentTargetPart = nil
+
+local TIMING = {
+    mineWait = 1.0,
+    minWait  = 0.3,
+    maxWait  = 10.0,
+    step     = 0.25,
+}
+
+local TELEPORT_CLEARANCE = 5
+
+local refs = {
+    oreButtons = {}, zoneButtons = {},
+    status = nil, timingLabel = nil,
+    mainFrame = nil, toggleBtn = nil,
+}
+
+if player.PlayerGui:FindFirstChild("GemOreMinerGUI") then
+    player.PlayerGui.GemOreMinerGUI:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "GemOreMinerGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- ============================================================
+-- LOADING SPLASH
+-- ============================================================
+local LoadingFrame = Instance.new("Frame")
+LoadingFrame.Name = "LoadingFrame"
+LoadingFrame.Size = UDim2.new(1, 0, 1, 0)
+LoadingFrame.BackgroundColor3 = Color3.fromRGB(8, 8, 12)
+LoadingFrame.BorderSizePixel = 0
+LoadingFrame.ZIndex = 10
+LoadingFrame.Parent = ScreenGui
+
+local BGGradient = Instance.new("UIGradient")
+BGGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(10, 10, 20)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(20, 40, 60)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 10, 20)),
+})
+BGGradient.Rotation = 45
+BGGradient.Parent = LoadingFrame
+
+local DiamondIcon = Instance.new("TextLabel")
+DiamondIcon.Size = UDim2.new(0, 100, 0, 100)
+DiamondIcon.Position = UDim2.new(0.5, -50, 0.28, 0)
+DiamondIcon.BackgroundTransparency = 1
+DiamondIcon.Text = "💎"
+DiamondIcon.TextScaled = true
+DiamondIcon.ZIndex = 11
+DiamondIcon.Parent = LoadingFrame
+
+local Glow = Instance.new("ImageLabel")
+Glow.Size = UDim2.new(0, 250, 0, 250)
+Glow.Position = UDim2.new(0.5, -125, 0.28, -75)
+Glow.BackgroundTransparency = 1
+Glow.Image = "rbxassetid://5028857084"
+Glow.ImageColor3 = BRAND_COLOR
+Glow.ImageTransparency = 0.5
+Glow.ZIndex = 10
+Glow.Parent = LoadingFrame
+
+local LoadingLabel = Instance.new("TextLabel")
+LoadingLabel.Size = UDim2.new(0.9, 0, 0.08, 0)
+LoadingLabel.Position = UDim2.new(0.05, 0, 0.46, 0)
+LoadingLabel.BackgroundTransparency = 1
+LoadingLabel.Text = BRAND_TITLE .. " by " .. BRAND_OWNER
+LoadingLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+LoadingLabel.Font = Enum.Font.GothamBlack
+LoadingLabel.TextScaled = true
+LoadingLabel.ZIndex = 11
+LoadingLabel.Parent = LoadingFrame
+
+local TextGradient = Instance.new("UIGradient")
+TextGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, BRAND_COLOR),
+    ColorSequenceKeypoint.new(0.5, BRAND_ACCENT),
+    ColorSequenceKeypoint.new(1, BRAND_COLOR),
+})
+TextGradient.Parent = LoadingLabel
+
+local MessageLabel = Instance.new("TextLabel")
+MessageLabel.Size = UDim2.new(0.8, 0, 0.05, 0)
+MessageLabel.Position = UDim2.new(0.1, 0, 0.555, 0)
+MessageLabel.BackgroundTransparency = 1
+MessageLabel.Text = "Hope you enjoy! New updates soon!"
+MessageLabel.TextColor3 = Color3.fromRGB(190, 200, 210)
+MessageLabel.Font = Enum.Font.Gotham
+MessageLabel.TextScaled = true
+MessageLabel.ZIndex = 11
+MessageLabel.Parent = LoadingFrame
+
+local BarBG = Instance.new("Frame")
+BarBG.Size = UDim2.new(0.4, 0, 0, 8)
+BarBG.Position = UDim2.new(0.3, 0, 0.65, 0)
+BarBG.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+BarBG.BorderSizePixel = 0
+BarBG.ZIndex = 11
+BarBG.Parent = LoadingFrame
+local BarCorner = Instance.new("UICorner"); BarCorner.CornerRadius = UDim.new(1, 0); BarCorner.Parent = BarBG
+
+local BarFill = Instance.new("Frame")
+BarFill.Size = UDim2.new(0, 0, 1, 0)
+BarFill.BackgroundColor3 = BRAND_COLOR
+BarFill.BorderSizePixel = 0
+BarFill.ZIndex = 12
+BarFill.Parent = BarBG
+local BarFillCorner = Instance.new("UICorner"); BarFillCorner.CornerRadius = UDim.new(1, 0); BarFillCorner.Parent = BarFill
+
+local BarFillGradient = Instance.new("UIGradient")
+BarFillGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, BRAND_COLOR),
+    ColorSequenceKeypoint.new(1, BRAND_ACCENT),
+})
+BarFillGradient.Parent = BarFill
+
+local SubLabel = Instance.new("TextLabel")
+SubLabel.Size = UDim2.new(0.6, 0, 0.05, 0)
+SubLabel.Position = UDim2.new(0.2, 0, 0.69, 0)
+SubLabel.BackgroundTransparency = 1
+SubLabel.Text = "Loading..."
+SubLabel.TextColor3 = Color3.fromRGB(180, 180, 190)
+SubLabel.Font = Enum.Font.Gotham
+SubLabel.TextScaled = true
+SubLabel.ZIndex = 11
+SubLabel.Parent = LoadingFrame
+
+local spinning = true
+task.spawn(function()
+    while spinning do
+        DiamondIcon.Rotation = DiamondIcon.Rotation + 1
+        task.wait(0.02)
+    end
+end)
+task.spawn(function()
+    while spinning do
+        BGGradient.Rotation = BGGradient.Rotation + 0.5
+        task.wait(0.03)
+    end
+end)
+TweenService:Create(BarFill, TweenInfo.new(2.3, Enum.EasingStyle.Quad), {Size = UDim2.new(1, 0, 1, 0)}):Play()
+
+-- ============================================================
+-- MAIN FRAME
+-- ============================================================
+local main = Instance.new("Frame")
+main.Name = "MainFrame"
+main.Size = UDim2.new(0, 250, 0, 674)
+main.Position = UDim2.new(0, 20, 0.5, -337)
+main.BackgroundColor3 = Color3.fromRGB(20,20,30)
+main.BackgroundTransparency = 0.1
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
+main.Visible = false
+main.ZIndex = 5
+main.Parent = ScreenGui
+refs.mainFrame = main
+
+local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0,10); corner.Parent = main
+local stroke = Instance.new("UIStroke"); stroke.Color = Color3.fromRGB(80,80,120); stroke.Thickness = 2; stroke.Parent = main
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 35)
+title.BackgroundColor3 = Color3.fromRGB(30,30,50)
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.Text = BRAND_TITLE .. " — " .. BRAND_OWNER
+title.Font = Enum.Font.GothamBold
+title.TextSize = 13
+title.BorderSizePixel = 0
+title.Parent = main
+local tc = Instance.new("UICorner"); tc.CornerRadius = UDim.new(0,10); tc.Parent = title
+
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0,30,0,30)
+minBtn.Position = UDim2.new(1,-35,0,2)
+minBtn.BackgroundColor3 = Color3.fromRGB(50,50,70)
+minBtn.Text = "-"
+minBtn.TextColor3 = Color3.fromRGB(255,255,255)
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 18
+minBtn.BorderSizePixel = 0
+minBtn.Parent = title
+local mc = Instance.new("UICorner"); mc.CornerRadius = UDim.new(0,6); mc.Parent = minBtn
+
+-- Ore section
+local oreHeader = Instance.new("TextLabel")
+oreHeader.Size = UDim2.new(1,-20,0,20)
+oreHeader.Position = UDim2.new(0,10,0,42)
+oreHeader.BackgroundTransparency = 1
+oreHeader.Text = "SELECT ORES (toggle any)"
+oreHeader.TextColor3 = Color3.fromRGB(180,180,220)
+oreHeader.Font = Enum.Font.GothamBold
+oreHeader.TextSize = 11
+oreHeader.TextXAlignment = Enum.TextXAlignment.Left
+oreHeader.Parent = main
+
+local oreList = {
+    {key="sapphire", label="Sapphire",  color=Color3.fromRGB(0,120,255)},
+    {key="ruby",     label="Ruby",      color=Color3.fromRGB(255,30,60)},
+    {key="emerald",  label="Emerald",   color=Color3.fromRGB(0,220,120)},
+    {key="amethyst", label="Amethyst",  color=Color3.fromRGB(170,80,255)},
+    {key="rainbow",  label="Rainbow",   color=Color3.fromRGB(255,255,255)},
+}
+
+local oreFrame = Instance.new("Frame")
+oreFrame.Size = UDim2.new(1,-20,0,#oreList*34)
+oreFrame.Position = UDim2.new(0,10,0,66)
+oreFrame.BackgroundTransparency = 1
+oreFrame.Parent = main
+local ol = Instance.new("UIListLayout"); ol.Padding = UDim.new(0,4); ol.SortOrder = Enum.SortOrder.LayoutOrder; ol.Parent = oreFrame
+
+local function makeToggleButton(parent, order, label, color, onClick)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 30)
+    btn.BackgroundColor3 = Color3.fromRGB(40,40,55)
+    btn.BackgroundTransparency = 0.3
+    btn.Text = label
+    btn.TextColor3 = color
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 13
+    btn.BorderSizePixel = 0
+    btn.LayoutOrder = order
+    btn.AutoButtonColor = false
+    btn.Parent = parent
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0,6); c.Parent = btn
+    local dot = Instance.new("Frame")
+    dot.Size = UDim2.new(0,10,0,10)
+    dot.Position = UDim2.new(0,10,0.5,-5)
+    dot.BackgroundColor3 = Color3.fromRGB(80,80,100)
+    dot.BorderSizePixel = 0
+    dot.Parent = btn
+    local dc = Instance.new("UICorner"); dc.CornerRadius = UDim.new(1,0); dc.Parent = dot
+    btn.MouseButton1Click:Connect(function() onClick(btn, dot) end)
+    return btn, dot
+end
+
+local function setToggleVisual(btn, dot, color, active)
+    if active then
+        btn.BackgroundColor3 = color
+        btn.BackgroundTransparency = 0.15
+        dot.BackgroundColor3 = Color3.fromRGB(255,255,255)
+    else
+        btn.BackgroundColor3 = Color3.fromRGB(40,40,55)
+        btn.BackgroundTransparency = 0.3
+        dot.BackgroundColor3 = Color3.fromRGB(80,80,100)
+    end
+end
+
+local function updateStatus()
+    if not refs.status then return end
+    local ores = {}
+    for _, v in pairs({"sapphire","ruby","emerald","amethyst","rainbow"}) do
+        if selectedOres[v] then table.insert(ores, v) end
+    end
+    local zones = {}
+    for _, z in ipairs(ZONES) do if selectedZones[z.key] then table.insert(zones, z.name) end end
+    local oreStr = #ores > 0 and table.concat(ores, ", ") or "All Ores"
+    local zoneStr = #zones > 0 and table.concat(zones, ", ") or "None"
+    refs.status.Text = string.format("Ores: %s\nZones: %s\nDelay: %.2fs\nState: %s",
+        oreStr, zoneStr, TIMING.mineWait, farming and "FARMING" or "idle")
+end
+
+local function saveConfigToDisk()
+    local data = { ores = {}, zones = {}, delay = TIMING.mineWait }
+    for k, v in pairs(selectedOres)  do if v then data.ores[k]  = true end end
+    for k, v in pairs(selectedZones) do if v then data.zones[k] = true end end
+
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(data) end)
+    if not ok or not encoded then return end
+    if hasFileIO then pcall(function() writefile(CONFIG_FILENAME, encoded) end) end
+    pcall(function() player:SetAttribute("OreFarm_Config", encoded) end)
+end
+
+local function loadConfigFromDisk()
+    local encoded
+    if hasFileIO then
+        local ok, contents = pcall(function()
+            if isfile(CONFIG_FILENAME) then return readfile(CONFIG_FILENAME) end
+            return nil
+        end)
+        if ok and contents and #contents > 0 then encoded = contents end
+    end
+    if not encoded then
+        local attr = player:GetAttribute("OreFarm_Config")
+        if type(attr) == "string" and #attr > 0 then encoded = attr end
+    end
+    if not encoded then return end
+
+    local ok, data = pcall(function() return HttpService:JSONDecode(encoded) end)
+    if not ok or type(data) ~= "table" then return end
+    if type(data.ores) == "table" then
+        for k, v in pairs(data.ores) do if v then selectedOres[k] = true end end
+    end
+    if type(data.zones) == "table" then
+        for k, v in pairs(data.zones) do if v then selectedZones[k] = true end end
+    end
+    if tonumber(data.delay) then
+        TIMING.mineWait = math.clamp(tonumber(data.delay), TIMING.minWait, TIMING.maxWait)
+    end
+end
+
+local saveQueued = false
+local function queueSaveConfig()
+    if saveQueued then return end
+    saveQueued = true
+    task.delay(0.4, function()
+        saveQueued = false
+        saveConfigToDisk()
+    end)
+end
+
+for i, ore in ipairs(oreList) do
+    local btn, dot = makeToggleButton(oreFrame, i, ore.label, ore.color, function(b,d)
+        selectedOres[ore.key] = not selectedOres[ore.key] or nil
+        setToggleVisual(b, d, ore.color, selectedOres[ore.key] == true)
+        updateStatus()
+        queueSaveConfig()
+    end)
+    setToggleVisual(btn, dot, ore.color, false)
+    refs.oreButtons[ore.key] = {button=btn, dot=dot, color=ore.color}
+end
+
+-- Zone section
+local zoneHeader = Instance.new("TextLabel")
+zoneHeader.Size = UDim2.new(1,-20,0,20)
+zoneHeader.Position = UDim2.new(0,10,0,66 + #oreList*34 + 8)
+zoneHeader.BackgroundTransparency = 1
+zoneHeader.Text = "SELECT ZONES (toggle any)"
+zoneHeader.TextColor3 = Color3.fromRGB(180,180,220)
+zoneHeader.Font = Enum.Font.GothamBold
+zoneHeader.TextSize = 11
+zoneHeader.TextXAlignment = Enum.TextXAlignment.Left
+zoneHeader.Parent = main
+
+local zoneFrame = Instance.new("Frame")
+zoneFrame.Size = UDim2.new(1,-20,0,#ZONES*34)
+zoneFrame.Position = UDim2.new(0,10,0,66 + #oreList*34 + 30)
+zoneFrame.BackgroundTransparency = 1
+zoneFrame.Parent = main
+local zl = Instance.new("UIListLayout"); zl.Padding = UDim.new(0,4); zl.SortOrder = Enum.SortOrder.LayoutOrder; zl.Parent = zoneFrame
+
+for i, z in ipairs(ZONES) do
+    local btn, dot = makeToggleButton(zoneFrame, i, z.name, z.color, function(b,d)
+        selectedZones[z.key] = not selectedZones[z.key] or nil
+        setToggleVisual(b, d, z.color, selectedZones[z.key] == true)
+        rebuildZoneRotation()
+        updateStatus()
+        queueSaveConfig()
+    end)
+    setToggleVisual(btn, dot, z.color, false)
+    refs.zoneButtons[z.key] = {button=btn, dot=dot, color=z.color}
+end
+
+-- Timing row
+local timingHeader = Instance.new("TextLabel")
+timingHeader.Size = UDim2.new(1,-20,0,20)
+timingHeader.Position = UDim2.new(0,10,0,66 + #oreList*34 + 30 + #ZONES*34 + 8)
+timingHeader.BackgroundTransparency = 1
+timingHeader.Text = "TELEPORT DELAY (seconds)"
+timingHeader.TextColor3 = Color3.fromRGB(180,180,220)
+timingHeader.Font = Enum.Font.GothamBold
+timingHeader.TextSize = 11
+timingHeader.TextXAlignment = Enum.TextXAlignment.Left
+timingHeader.Parent = main
+
+local timingFrame = Instance.new("Frame")
+timingFrame.Size = UDim2.new(1,-20,0,34)
+timingFrame.Position = UDim2.new(0,10,0,66 + #oreList*34 + 30 + #ZONES*34 + 30)
+timingFrame.BackgroundColor3 = Color3.fromRGB(30,30,45)
+timingFrame.BackgroundTransparency = 0.2
+timingFrame.BorderSizePixel = 0
+timingFrame.Parent = main
+local tfc = Instance.new("UICorner"); tfc.CornerRadius = UDim.new(0,6); tfc.Parent = timingFrame
+
+local minusBtn = Instance.new("TextButton")
+minusBtn.Size = UDim2.new(0,36,1,0)
+minusBtn.BackgroundColor3 = Color3.fromRGB(60,60,80)
+minusBtn.Text = "−"
+minusBtn.TextColor3 = Color3.fromRGB(255,255,255)
+minusBtn.Font = Enum.Font.GothamBold
+minusBtn.TextSize = 18
+minusBtn.BorderSizePixel = 0
+minusBtn.Parent = timingFrame
+local mbc = Instance.new("UICorner"); mbc.CornerRadius = UDim.new(0,6); mbc.Parent = minusBtn
+
+local valueLbl = Instance.new("TextLabel")
+valueLbl.Size = UDim2.new(1, -72, 1, 0)
+valueLbl.Position = UDim2.new(0, 36, 0, 0)
+valueLbl.BackgroundTransparency = 1
+valueLbl.Text = string.format("%.2fs", TIMING.mineWait)
+valueLbl.TextColor3 = Color3.fromRGB(255,255,255)
+valueLbl.Font = Enum.Font.GothamBold
+valueLbl.TextSize = 14
+valueLbl.Parent = timingFrame
+refs.timingLabel = valueLbl
+
+local plusBtn = Instance.new("TextButton")
+plusBtn.Size = UDim2.new(0,36,1,0)
+plusBtn.Position = UDim2.new(1,-36,0,0)
+plusBtn.BackgroundColor3 = Color3.fromRGB(60,60,80)
+plusBtn.Text = "+"
+plusBtn.TextColor3 = Color3.fromRGB(255,255,255)
+plusBtn.Font = Enum.Font.GothamBold
+plusBtn.TextSize = 18
+plusBtn.BorderSizePixel = 0
+plusBtn.Parent = timingFrame
+local pbc = Instance.new("UICorner"); pbc.CornerRadius = UDim.new(0,6); pbc.Parent = plusBtn
+
+local function refreshTiming()
+    valueLbl.Text = string.format("%.2fs", TIMING.mineWait)
+    updateStatus()
+end
+minusBtn.MouseButton1Click:Connect(function()
+    TIMING.mineWait = math.max(TIMING.minWait, TIMING.mineWait - TIMING.step)
+    refreshTiming(); queueSaveConfig()
+end)
+plusBtn.MouseButton1Click:Connect(function()
+    TIMING.mineWait = math.min(TIMING.maxWait, TIMING.mineWait + TIMING.step)
+    refreshTiming(); queueSaveConfig()
+end)
+
+-- Start / Stop
+local btnFrame = Instance.new("Frame")
+btnFrame.Size = UDim2.new(1,-20,0,80)
+btnFrame.Position = UDim2.new(0,10,0,66 + #oreList*34 + 30 + #ZONES*34 + 30 + 54)
+btnFrame.BackgroundTransparency = 1
+btnFrame.Parent = main
+
+local startBtn = Instance.new("TextButton")
+startBtn.Size = UDim2.new(1,0,0,34)
+startBtn.BackgroundColor3 = Color3.fromRGB(40,160,60)
+startBtn.Text = "▶ Start Farming"
+startBtn.TextColor3 = Color3.fromRGB(255,255,255)
+startBtn.Font = Enum.Font.GothamBold
+startBtn.TextSize = 14
+startBtn.BorderSizePixel = 0
+startBtn.Parent = btnFrame
+local sc = Instance.new("UICorner"); sc.CornerRadius = UDim.new(0,6); sc.Parent = startBtn
+
+local stopBtn = Instance.new("TextButton")
+stopBtn.Size = UDim2.new(1,0,0,34)
+stopBtn.Position = UDim2.new(0,0,0,40)
+stopBtn.BackgroundColor3 = Color3.fromRGB(180,40,40)
+stopBtn.Text = "■ Stop"
+stopBtn.TextColor3 = Color3.fromRGB(255,255,255)
+stopBtn.Font = Enum.Font.GothamBold
+stopBtn.TextSize = 14
+stopBtn.BorderSizePixel = 0
+stopBtn.Parent = btnFrame
+local stc = Instance.new("UICorner"); stc.CornerRadius = UDim.new(0,6); stc.Parent = stopBtn
+
+startBtn.MouseButton1Click:Connect(function() task.spawn(function()
+    if startFarming then startFarming() end
+end) end)
+stopBtn.MouseButton1Click:Connect(function()
+    if stopFarming then stopFarming() end
+end)
+
+-- Status
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1,-20,0,66)
+status.Position = UDim2.new(0,10,1,-72)
+status.BackgroundTransparency = 1
+status.TextColor3 = Color3.fromRGB(200,200,220)
+status.Font = Enum.Font.Gotham
+status.TextSize = 11
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.TextYAlignment = Enum.TextYAlignment.Top
+status.Text = ""
+status.Parent = main
+refs.status = status
+
+local minimizedInner = false
+minBtn.MouseButton1Click:Connect(function()
+    minimizedInner = not minimizedInner
+    for _, obj in ipairs({oreHeader, oreFrame, zoneHeader, zoneFrame, timingHeader, timingFrame, btnFrame, status}) do
+        obj.Visible = not minimizedInner
+    end
+    main.Size = minimizedInner and UDim2.new(0,250,0,40) or UDim2.new(0,250,0,674)
+    minBtn.Text = minimizedInner and "+" or "-"
+end)
+
+-- ============================================================
+-- DIAMOND TOGGLE BUTTON
+-- ============================================================
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Name = "MinimizeButton"
+MinimizeButton.Size = UDim2.new(0, 55, 0, 55)
+MinimizeButton.Position = UDim2.new(0, 20, 0, 20)
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+MinimizeButton.Text = "💎"
+MinimizeButton.TextScaled = true
+MinimizeButton.AutoButtonColor = false
+MinimizeButton.Visible = false
+MinimizeButton.ZIndex = 20
+MinimizeButton.Parent = ScreenGui
+refs.toggleBtn = MinimizeButton
+
+local MinCorner = Instance.new("UICorner"); MinCorner.CornerRadius = UDim.new(1, 0); MinCorner.Parent = MinimizeButton
+
+local MinStroke = Instance.new("UIStroke")
+MinStroke.Color = BRAND_COLOR
+MinStroke.Thickness = 2
+MinStroke.Transparency = 0.3
+MinStroke.Parent = MinimizeButton
+
+task.spawn(function()
+    while MinimizeButton.Parent do
+        TweenService:Create(MinStroke, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Transparency = 0.8}):Play()
+        task.wait(1)
+        TweenService:Create(MinStroke, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Transparency = 0.2}):Play()
+        task.wait(1)
+    end
+end)
+
+MinimizeButton.MouseEnter:Connect(function()
+    TweenService:Create(MinimizeButton, TweenInfo.new(0.15), {Size = UDim2.new(0, 60, 0, 60)}):Play()
+end)
+MinimizeButton.MouseLeave:Connect(function()
+    TweenService:Create(MinimizeButton, TweenInfo.new(0.15), {Size = UDim2.new(0, 55, 0, 55)}):Play()
+end)
+
+do
+    local dragging, dragInput, dragStart, startPos
+    MinimizeButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = MinimizeButton.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    MinimizeButton.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            MinimizeButton.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+local menuOpen = true
+MinimizeButton.MouseButton1Click:Connect(function()
+    menuOpen = not menuOpen
+    main.Visible = menuOpen
+    local targetRotation = menuOpen and 0 or 180
+    TweenService:Create(MinimizeButton, TweenInfo.new(0.3), {Rotation = targetRotation}):Play()
+end)
+
+-- ============================================================
+-- SCANNER
+-- ============================================================
+local function getBlockWorlds()
+    local current = Workspace
+    for _, name in ipairs(BLOCKWORLDS_PATH) do
+        current = current:FindFirstChild(name)
+        if not current then return nil end
+    end
+    return current
+end
+
+local function getOreInfo(object)
+    if not object or not object:IsA("BasePart") then return nil end
+    local idValue = object:GetAttribute(ORE_ATTRIBUTE)
+    if not idValue or type(idValue) ~= "string" then return nil end
+    local key = string.lower(idValue)
+    if IGNORE_IDS[key] then return nil end
+    if ORE_TYPES[key] then return ORE_TYPES[key] end
+    for oreKey, info in pairs(ORE_TYPES) do
+        if string.find(key, oreKey, 1, true) then return info end
+    end
+    return nil
+end
+
+local function highlightOre(ore, info)
+    if ore:FindFirstChild("OreHighlight") then return end
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "OreHighlight"
+    highlight.FillColor = info.color
+    highlight.FillTransparency = 0.35
+    highlight.OutlineColor = Color3.fromRGB(255,255,255)
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = ore
+
+    if SHOW_BILLBOARD then
+        local billboard = Instance.new("BillboardGui")
+        billboard.Name = "OreBillboard"
+        billboard.Size = UDim2.new(0,160,0,50)
+        billboard.StudsOffset = Vector3.new(0,3,0)
+        billboard.AlwaysOnTop = true
+        billboard.MaxDistance = BILLBOARD_MAX_DISTANCE
+        billboard.Parent = ore
+        local label = Instance.new("TextLabel")
+        label.Name = "InfoLabel"
+        label.Size = UDim2.new(1,0,1,0)
+        label.BackgroundTransparency = 1
+        label.TextColor3 = info.color
+        label.TextStrokeTransparency = 0
+        label.TextScaled = true
+        label.Font = Enum.Font.GothamBold
+        label.Text = info.tier .. "\n?"
+        label.Parent = billboard
+    end
+end
+
+local function unhighlightOre(ore)
+    local h = ore:FindFirstChild("OreHighlight"); if h then h:Destroy() end
+    local b = ore:FindFirstChild("OreBillboard"); if b then b:Destroy() end
+end
+
+local function scanForOres()
+    local container = getBlockWorlds()
+    if not container then return end
+    local currentOres = {}
+    for _, descendant in ipairs(container:GetDescendants()) do
+        local info = getOreInfo(descendant)
+        if info then
+            currentOres[descendant] = info
+            if not foundOres[descendant] then
+                foundOres[descendant] = info
+                highlightOre(descendant, info)
+            end
+        end
+    end
+    for ore in pairs(foundOres) do
+        if not currentOres[ore] or not ore.Parent then
+            unhighlightOre(ore)
+            foundOres[ore] = nil
+        end
+    end
+end
+
+local function getNearestOreTo(position, filterFn)
+    local nearest, nearestInfo, shortest = nil, nil, math.huge
+    for part, info in pairs(foundOres) do
+        if part.Parent then
+            if not filterFn or filterFn(info) then
+                local d = (part.Position - position).Magnitude
+                if d < shortest then
+                    shortest, nearest, nearestInfo = d, part, info
+                end
+            end
+        end
+    end
+    return nearest, nearestInfo, shortest
+end
+
+RunService.RenderStepped:Connect(function()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local rootPos = root.Position
+    local rainbow = Color3.fromHSV((tick() * 0.25) % 1, 1, 1)
+    for ore, info in pairs(foundOres) do
+        if ore.Parent then
+            local billboard = ore:FindFirstChild("OreBillboard")
+            local label = billboard and billboard:FindFirstChild("InfoLabel")
+            if label then
+                local dist = (ore.Position - rootPos).Magnitude
+                label.Text = string.format("%s\n%.0f", info.tier, dist)
+            end
+            if info.oreKey == "rainbow" then
+                local h = ore:FindFirstChild("OreHighlight")
+                if h then
+                    h.FillColor = rainbow
+                    h.OutlineColor = rainbow
+                end
+            end
+        end
+    end
+end)
+
+-- ============================================================
+-- TELEPORT + AUTO-MINE
+-- ============================================================
+local function notify(msg, col)
+    if NotificationCmds and NotificationCmds.Message and NotificationCmds.Message.Bottom then
+        NotificationCmds.Message.Bottom({Message = msg, Color = col or Color3.fromRGB(0,255,0)})
+    end
+end
+
+local function getZonePosition(teleportName)
+    local inst = Workspace.__THINGS
+    if not inst then return nil end
+    inst = inst:FindFirstChild("__INSTANCE_CONTAINER"); if not inst then return nil end
+    inst = inst:FindFirstChild("Active"); if not inst then return nil end
+    inst = inst:FindFirstChild("SpaceMiningEvent"); if not inst then return nil end
+    local tp = inst:FindFirstChild("Teleports"); if not tp then return nil end
+    local p = tp:FindFirstChild(teleportName)
+    if p and p:IsA("BasePart") then return p.Position end
+    return nil
+end
+
+local function teleportToPosition(pos)
+    local char = player.Character
+    if not char or not char.PrimaryPart then return end
+    char:PivotTo(CFrame.new(pos + Vector3.new(0,3,0)))
+end
+
+local function ensureInInstance()
+    if InstancingCmds and InstancingCmds.IsInInstance("SpaceMiningEvent") then return true end
+    if not InstancingCmds then notify("InstancingCmds not loaded!", Color3.fromRGB(255,0,0)); return false end
+    notify("Entering Space Mining Event...", Color3.fromRGB(0,200,255))
+    InstancingCmds.Enter("SpaceMiningEvent")
+    local t = 0
+    while not InstancingCmds.IsInInstance("SpaceMiningEvent") and t < 15 do
+        task.wait(0.5); t = t + 0.5
+    end
+    if not InstancingCmds.IsInInstance("SpaceMiningEvent") then
+        notify("Failed to enter instance!", Color3.fromRGB(255,0,0)); return false
+    end
+    task.wait(2)
+    return true
+end
+
+local function enableAutoMine()
+    if not AutoMineCmds then return false end
+    if AutoMineCmds.IsEnabled() then return true end
+    if ToolUtil then
+        local has = ToolUtil.GetSelectedTool(player, "Pickaxe")
+        if not has then notify("Need a pickaxe equipped!", Color3.fromRGB(255,0,0)); return false end
+    end
+    AutoMineCmds.Enable()
+    Network.Fire("AutoMine_Enable")
+    return true
+end
+
+local function disableAutoMine()
+    if not AutoMineCmds then return end
+    if not AutoMineCmds.IsEnabled() then return end
+    AutoMineCmds.Disable()
+    Network.Fire("AutoMine_Disable")
+end
+
+local function teleportToOrePart(part)
+    if not part or not part.Parent then return false end
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not char or not root then return false end
+
+    local oreSize = part.Size or Vector3.new(3, 3, 3)
+    local topY = part.Position.Y + (oreSize.Y / 2)
+    local safeY = topY + TELEPORT_CLEARANCE
+
+    if ToolCmds and ToolCmds.TeleportLocalPlayerToBlock then
+        pcall(function() ToolCmds.TeleportLocalPlayerToBlock(part) end)
+        task.wait(0.05)
+    end
+
+    char:PivotTo(CFrame.new(part.Position.X, safeY, part.Position.Z))
+
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {char}
+    local origin = Vector3.new(root.Position.X, root.Position.Y + 50, root.Position.Z)
+    local hit = Workspace:Raycast(origin, Vector3.new(0, -200, 0), rayParams)
+    if hit then
+        local desiredY = hit.Position.Y + 3.5
+        if root.Position.Y < desiredY then
+            root.CFrame = CFrame.new(root.Position.X, desiredY, root.Position.Z)
+        end
+    end
+    return true
+end
+
+local zoneRotation = {}
+function rebuildZoneRotation()
+    zoneRotation = {}
+    for _, z in ipairs(ZONES) do
+        if selectedZones[z.key] then table.insert(zoneRotation, z) end
+    end
+end
+
+local function nextSelectedZone()
+    if #zoneRotation == 0 then return nil end
+    local idx = 1
+    for i, z in ipairs(zoneRotation) do
+        if z.key == activeZoneKey then idx = i; break end
+    end
+    return zoneRotation[(idx % #zoneRotation) + 1]
+end
+
+local function startFarmLoop()
+    if farmThread then task.cancel(farmThread) end
+    farmThread = task.spawn(function()
+        task.wait(2)
+        local idle = 0
+        while farming do
+            local char = player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if not root then task.wait(0.5); continue end
+
+            local ore = getNearestOreTo(root.Position, function(i)
+                if next(selectedOres) == nil then return true end
+                return selectedOres[i.oreKey] == true
+            end)
+
+            if ore then
+                currentTargetPart = ore
+                teleportToOrePart(ore)
+                task.wait(TIMING.mineWait)
+                idle = 0
+            else
+                idle = idle + 1
+                task.wait(1)
+                if idle >= 3 then
+                    local nz = nextSelectedZone()
+                    if nz then
+                        local pos = getZonePosition(nz.teleportName)
+                        if pos then
+                            teleportToPosition(pos)
+                            activeZoneKey = nz.key
+                            task.wait(2)
+                        end
+                    end
+                    idle = 0
+                end
+            end
+        end
+    end)
+end
+
+function startFarming()
+    if farming then return end
+    if not loadModules() then notify("Modules not loaded yet!", Color3.fromRGB(255,0,0)); return end
+    if not ensureInInstance() then return end
+
+    rebuildZoneRotation()
+    if #zoneRotation == 0 then
+        notify("Select at least one zone first!", Color3.fromRGB(255,0,0)); return
+    end
+    if not enableAutoMine() then return end
+
+    farming = true
+    activeZoneKey = zoneRotation[1].key
+    local pos = getZonePosition(zoneRotation[1].teleportName)
+    if pos then teleportToPosition(pos) end
+    notify("Farming started", Color3.fromRGB(0,255,0))
+    startFarmLoop()
+end
+
+function stopFarming()
+    if not farming then return end
+    farming = false
+    currentTargetPart = nil
+    if farmThread then task.cancel(farmThread); farmThread = nil end
+    disableAutoMine()
+    notify("Farming stopped", Color3.fromRGB(255,100,100))
+end
+
+-- ============================================================
+-- SPLASH -> MENU TRANSITION
+-- ============================================================
+task.delay(2.5, function()
+    spinning = false
+
+    local fadeOutBG      = TweenService:Create(LoadingFrame, TweenInfo.new(0.6), {BackgroundTransparency = 1})
+    local fadeOutText    = TweenService:Create(LoadingLabel, TweenInfo.new(0.5), {TextTransparency = 1})
+    local fadeOutMessage = TweenService:Create(MessageLabel, TweenInfo.new(0.5), {TextTransparency = 1})
+    local fadeOutSub     = TweenService:Create(SubLabel, TweenInfo.new(0.5), {TextTransparency = 1})
+    local fadeOutDiamond = TweenService:Create(DiamondIcon, TweenInfo.new(0.5), {TextTransparency = 1})
+    local fadeOutGlow    = TweenService:Create(Glow, TweenInfo.new(0.5), {ImageTransparency = 1})
+    local fadeOutBar     = TweenService:Create(BarBG, TweenInfo.new(0.5), {BackgroundTransparency = 1})
+
+    fadeOutBG:Play(); fadeOutText:Play(); fadeOutMessage:Play(); fadeOutSub:Play()
+    fadeOutDiamond:Play(); fadeOutGlow:Play(); fadeOutBar:Play()
+    BarFill.Visible = false
+
+    fadeOutBG.Completed:Wait()
+    LoadingFrame:Destroy()
+
+    main.Visible = true
+    MinimizeButton.Visible = true
+
+    MinimizeButton.Size = UDim2.new(0, 0, 0, 0)
+    TweenService:Create(MinimizeButton, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 55, 0, 55)}):Play()
+
+    task.spawn(function()
+        local tries = 0
+        while not loadModules() and tries < 30 do task.wait(1); tries = tries + 1 end
+
+        loadConfigFromDisk()
+
+        for key, data in pairs(refs.oreButtons) do
+            setToggleVisual(data.button, data.dot, data.color, selectedOres[key] == true)
+        end
+        for key, data in pairs(refs.zoneButtons) do
+            setToggleVisual(data.button, data.dot, data.color, selectedZones[key] == true)
+        end
+        rebuildZoneRotation()
+        if refs.timingLabel then
+            refs.timingLabel.Text = string.format("%.2fs", TIMING.mineWait)
+        end
+        updateStatus()
+
+        scanForOres()
+        task.spawn(function()
+            while task.wait(SCAN_INTERVAL) do scanForOres() end
+        end)
+
+        local container = getBlockWorlds()
+        if container then
+            container.DescendantAdded:Connect(function(descendant)
+                task.wait(0.1)
+                local info = getOreInfo(descendant)
+                if info and not foundOres[descendant] then
+                    foundOres[descendant] = info
+                    highlightOre(descendant, info)
+                end
+            end)
+        end
+
+        UserInputService.InputBegan:Connect(function(input, gp)
+            if gp then return end
+            if not farming then return end
+            if input.KeyCode == Enum.KeyCode.W or input.KeyCode == Enum.KeyCode.A
+            or input.KeyCode == Enum.KeyCode.S or input.KeyCode == Enum.KeyCode.D then
+                stopFarming()
+            end
+        end)
+
+        print(BRAND_TITLE .. " by " .. BRAND_OWNER .. " ready.")
+    end)
+end)
+
+end)
