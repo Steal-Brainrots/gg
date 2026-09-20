@@ -1,317 +1,458 @@
 --[[
-    Dark Matter Ore ESP + Finder + Server Hop (PS99)
-    - Scans the workspace for objects that look like "Dark Matter Ore"
-    - Highlights them with ESP (outline + name + distance)
-    - If none are found after ScanTime seconds, hops to a new server
-    - Stops hopping once an ore is found
+    DM HUNTER - Dark Matter ore detector + server hopper (Pet Simulator 99)
+    Requires an executor with: game:HttpGet (and ideally gethui/writefile/queue_on_teleport)
 
-    NOTE: Object names are guessed. Use Dex (or similar) to check what the
-    ore is actually called in workspace and adjust CONFIG.Keywords if needed.
+    GUI:
+      - Enable DM Hunter   : master switch (scanning + status)
+      - Auto server hop    : hop when no Dark Matter ore is left in the server
+      - Ore ESP            : highlight + name/distance tag on every match
+      - Hop delay          : seconds to wait (after nothing is left) before hopping
+      - HOP NOW            : hop immediately
 ]]
 
-local CONFIG = {
-    -- ALL of these must appear in the object's name (lowercase, letters only)
-    Keywords   = { "darkmatter", "ore" },
-
-    -- Ancestors with these names (lowercase) are ignored (pets, GUIs, etc.)
-    IgnoreAncestors = { "pets", "inventory", "petsinventory" },
-
-    ScanTime   = 8,      -- seconds to scan a server before hopping
-    LoadDelay  = 4,      -- extra wait after joining so the map can stream in
-    AutoHop    = true,   -- set false for ESP only
-    MinFreeSlots = 1,    -- only join servers with at least this many free slots
-    MaxPages   = 5,      -- server list pages to look through
-
-    -- Optional: URL of THIS script (raw link) so it re-runs after teleport.
-    -- If empty, put the script in your executor's autoexec folder instead.
-    ScriptURL  = "",
-
-    FillColor    = Color3.fromRGB(170, 0, 255),
-    OutlineColor = Color3.fromRGB(255, 255, 255),
+-- ========================= CONFIG =========================
+local Config = {
+    Keywords     = { "dark matter" }, -- lowercase; change if the in-game name differs
+    ScanGrace    = 6,                 -- seconds after joining before "nothing found" counts
+    AutoTeleport = false,             -- true = teleport next to each ore once when found
+    MinPlayers   = 1,
+    MaxFillRatio = 0.85,
+    -- Raw URL of THIS script so it re-runs after each hop. "" = disabled.
+    ScriptURL    = "",
 }
+-- ==========================================================
 
----------------------------------------------------------------------
--- Services
----------------------------------------------------------------------
-local Players         = game:GetService("Players")
-local RunService      = game:GetService("RunService")
-local HttpService     = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
-local StarterGui      = game:GetService("StarterGui")
-
-local LocalPlayer = Players.LocalPlayer
 if not game:IsLoaded() then game.Loaded:Wait() end
 
----------------------------------------------------------------------
--- Helpers
----------------------------------------------------------------------
-local function notify(title, text, dur)
+local Players         = game:GetService("Players")
+local Workspace       = game:GetService("Workspace")
+local TeleportService = game:GetService("TeleportService")
+local HttpService     = game:GetService("HttpService")
+local UserInputService= game:GetService("UserInputService")
+local TweenService    = game:GetService("TweenService")
+local RunService      = game:GetService("RunService")
+local CoreGui         = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local PlaceId, JobId = game.PlaceId, game.JobId
+
+-- ---------------------- persistence -------------------------
+local SAVE_FILE = "dm_hunter.json"
+local Save = { hops = 0, visited = {}, enabled = true, autoHop = true, esp = true, hopDelay = 4 }
+
+pcall(function()
+    if isfile and isfile(SAVE_FILE) then
+        local data = HttpService:JSONDecode(readfile(SAVE_FILE))
+        for k, v in pairs(data) do Save[k] = v end
+    end
+end)
+Save.visited[JobId] = true
+
+local function persist()
     pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = title, Text = text, Duration = dur or 5,
-        })
+        if writefile then writefile(SAVE_FILE, HttpService:JSONEncode(Save)) end
     end)
 end
 
-local function normalize(s)
-    return (s:lower():gsub("[^%a]", ""))
+local queueTeleport = queue_on_teleport or (syn and syn.queue_on_teleport)
+if queueTeleport and Config.ScriptURL ~= "" then
+    queueTeleport(("loadstring(game:HttpGet(%q))()"):format(Config.ScriptURL))
 end
 
-local function httpGet(url)
-    local ok, res = pcall(function() return game:HttpGet(url) end)
-    if ok then return res end
-    local req = (syn and syn.request) or (http and http.request) or http_request or request
-    if req then
-        local r = req({ Url = url, Method = "GET" })
-        return r and r.Body
-    end
-    return nil
+-- ---------------------- GUI ---------------------------------
+local PURPLE = Color3.fromRGB(139, 92, 246)
+local GRAYOFF = Color3.fromRGB(70, 70, 78)
+local PINK   = Color3.fromRGB(255, 107, 129)
+local GREEN  = Color3.fromRGB(74, 222, 128)
+local YELLOW = Color3.fromRGB(250, 204, 21)
+local RED    = Color3.fromRGB(248, 113, 113)
+local PANEL  = Color3.fromRGB(28, 28, 30)
+local TEXT   = Color3.fromRGB(235, 235, 240)
+local MUTED  = Color3.fromRGB(150, 150, 160)
+
+local function new(class, props, parent)
+    local inst = Instance.new(class)
+    for k, v in pairs(props) do inst[k] = v end
+    inst.Parent = parent
+    return inst
 end
 
-local function nameMatches(inst)
-    local n = normalize(inst.Name)
-    for _, kw in ipairs(CONFIG.Keywords) do
-        if not n:find(kw, 1, true) then return false end
-    end
-    return true
+local function corner(inst, r)
+    new("UICorner", { CornerRadius = UDim.new(0, r) }, inst)
 end
 
-local function isIgnored(inst)
-    -- ignore anything belonging to a player character
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr.Character and inst:IsDescendantOf(plr.Character) then
-            return true
+local guiParent = (gethui and gethui()) or (pcall(function() return CoreGui.Name end) and CoreGui) or LocalPlayer:WaitForChild("PlayerGui")
+local old = guiParent:FindFirstChild("DMHunterGui")
+if old then old:Destroy() end
+
+local gui = new("ScreenGui", { Name = "DMHunterGui", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, guiParent)
+
+local panel = new("Frame", {
+    Size = UDim2.fromOffset(264, 300),
+    Position = UDim2.new(0, 20, 0.5, -150),
+    BackgroundColor3 = PANEL,
+    BorderSizePixel = 0,
+}, gui)
+corner(panel, 12)
+new("UIStroke", { Color = Color3.fromRGB(50, 50, 56), Thickness = 1 }, panel)
+
+local title = new("TextLabel", {
+    Size = UDim2.new(1, -32, 0, 24),
+    Position = UDim2.new(0, 16, 0, 10),
+    BackgroundTransparency = 1,
+    Text = "DM HUNTER",
+    TextColor3 = MUTED,
+    Font = Enum.Font.GothamBold,
+    TextSize = 12,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, panel)
+
+-- drag panel by title
+do
+    local dragging, dragStart, startPos
+    title.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging, dragStart, startPos = true, input.Position, panel.Position
         end
-    end
-    -- ignore configured ancestor names
-    local p = inst.Parent
-    while p and p ~= workspace and p ~= game do
-        local pn = p.Name:lower()
-        for _, bad in ipairs(CONFIG.IgnoreAncestors) do
-            if pn == bad then return true end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local d = input.Position - dragStart
+            panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
         end
-        p = p.Parent
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+local function makeToggle(label, y, default, onChange)
+    local row = new("Frame", { Size = UDim2.new(1, -32, 0, 26), Position = UDim2.new(0, 16, 0, y), BackgroundTransparency = 1 }, panel)
+    new("TextLabel", {
+        Size = UDim2.new(1, -56, 1, 0), BackgroundTransparency = 1, Text = label,
+        TextColor3 = TEXT, Font = Enum.Font.GothamMedium, TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }, row)
+    local pill = new("TextButton", {
+        Size = UDim2.fromOffset(44, 22), Position = UDim2.new(1, -44, 0.5, -11),
+        Text = "", AutoButtonColor = false, BackgroundColor3 = GRAYOFF,
+    }, row)
+    corner(pill, 11)
+    local knob = new("Frame", { Size = UDim2.fromOffset(16, 16), BackgroundColor3 = Color3.new(1, 1, 1) }, pill)
+    corner(knob, 8)
+
+    local value = default
+    local function render()
+        local info = TweenInfo.new(0.12)
+        TweenService:Create(pill, info, { BackgroundColor3 = value and PURPLE or GRAYOFF }):Play()
+        TweenService:Create(knob, info, { Position = value and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8) }):Play()
+    end
+    knob.Position = value and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+    pill.BackgroundColor3 = value and PURPLE or GRAYOFF
+
+    pill.MouseButton1Click:Connect(function()
+        value = not value
+        render()
+        onChange(value)
+    end)
+end
+
+-- state (mirrors saved settings)
+local State = { enabled = Save.enabled, autoHop = Save.autoHop, esp = Save.esp, hopDelay = Save.hopDelay }
+
+makeToggle("Enable DM Hunter", 40, State.enabled, function(v) State.enabled = v; Save.enabled = v; persist() end)
+makeToggle("Auto server hop", 72, State.autoHop, function(v) State.autoHop = v; Save.autoHop = v; persist() end)
+makeToggle("Ore ESP", 104, State.esp, function(v) State.esp = v; Save.esp = v; persist() end)
+
+-- slider
+new("TextLabel", {
+    Size = UDim2.new(1, -100, 0, 18), Position = UDim2.new(0, 16, 0, 146), BackgroundTransparency = 1,
+    Text = "Hop delay (seconds)", TextColor3 = TEXT, Font = Enum.Font.GothamMedium, TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, panel)
+local valueLabel = new("TextLabel", {
+    Size = UDim2.fromOffset(60, 18), Position = UDim2.new(1, -76, 0, 146), BackgroundTransparency = 1,
+    Text = string.format("%.1f", State.hopDelay), TextColor3 = TEXT, Font = Enum.Font.GothamBold, TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Right,
+}, panel)
+
+do
+    local MIN, MAX, STEP = 1, 10, 0.5
+    local track = new("Frame", {
+        Size = UDim2.new(1, -32, 0, 4), Position = UDim2.new(0, 16, 0, 180),
+        BackgroundColor3 = Color3.fromRGB(60, 60, 66), BorderSizePixel = 0,
+    }, panel)
+    corner(track, 2)
+    local hit = new("TextButton", { -- bigger click area
+        Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 0.5, -12), BackgroundTransparency = 1, Text = "",
+    }, track)
+    local knob = new("Frame", {
+        Size = UDim2.fromOffset(14, 14), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new((State.hopDelay - MIN) / (MAX - MIN), 0, 0.5, 0),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+    }, track)
+    corner(knob, 7)
+
+    local dragging = false
+    local function setFromX(x)
+        local alpha = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        local v = MIN + alpha * (MAX - MIN)
+        v = math.floor(v / STEP + 0.5) * STEP
+        State.hopDelay = v
+        Save.hopDelay = v
+        knob.Position = UDim2.new((v - MIN) / (MAX - MIN), 0, 0.5, 0)
+        valueLabel.Text = string.format("%.1f", v)
+    end
+    hit.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            setFromX(input.Position.X)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            setFromX(input.Position.X)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+            dragging = false
+            persist()
+        end
+    end)
+end
+
+-- status
+local dot = new("Frame", {
+    Size = UDim2.fromOffset(10, 10), Position = UDim2.new(0, 16, 0, 209), BackgroundColor3 = YELLOW,
+}, panel)
+corner(dot, 5)
+local statusLabel = new("TextLabel", {
+    Size = UDim2.new(1, -44, 0, 18), Position = UDim2.new(0, 34, 0, 205), BackgroundTransparency = 1,
+    Text = "Scanning...", TextColor3 = YELLOW, Font = Enum.Font.GothamBold, TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, panel)
+local subLabel = new("TextLabel", {
+    Size = UDim2.new(1, -44, 0, 16), Position = UDim2.new(0, 34, 0, 226), BackgroundTransparency = 1,
+    Text = "", TextColor3 = MUTED, Font = Enum.Font.Gotham, TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, panel)
+
+local function setStatus(color, text, sub)
+    dot.BackgroundColor3 = color
+    statusLabel.TextColor3 = color
+    statusLabel.Text = text
+    subLabel.Text = sub or ""
+end
+
+local hopBtn = new("TextButton", {
+    Size = UDim2.new(1, -32, 0, 36), Position = UDim2.new(0, 16, 1, -52),
+    BackgroundColor3 = PINK, Text = "HOP NOW", TextColor3 = Color3.new(1, 1, 1),
+    Font = Enum.Font.GothamBold, TextSize = 13, AutoButtonColor = true,
+}, panel)
+corner(hopBtn, 8)
+
+-- ---------------------- scanning + ESP ----------------------
+local function matches(name)
+    name = name:lower()
+    for _, kw in ipairs(Config.Keywords) do
+        if name:find(kw, 1, true) then return true end
     end
     return false
 end
 
-local function isTarget(inst)
-    if not (inst:IsA("Model") or inst:IsA("BasePart")) then return false end
-    if not nameMatches(inst) then return false end
-    -- avoid duplicates: skip a part whose parent model already matches
-    local parent = inst.Parent
-    if parent and parent ~= workspace and parent:IsA("Model") and nameMatches(parent) then
-        return false
-    end
-    return not isIgnored(inst)
-end
-
-local function getPosition(inst)
+local function baseOf(inst)
+    if inst:IsA("BasePart") then return inst end
     if inst:IsA("Model") then
-        local ok, cf = pcall(function() return inst:GetPivot() end)
-        return ok and cf.Position or nil
+        return inst.PrimaryPart or inst:FindFirstChildWhichIsA("BasePart", true)
     end
-    return inst.Position
 end
 
----------------------------------------------------------------------
--- ESP
----------------------------------------------------------------------
-local tracked = {}      -- [instance] = { highlight, gui, label }
-local foundCount = 0
-
-local espFolder = Instance.new("Folder")
-espFolder.Name = "DMO_ESP"
-pcall(function()
-    espFolder.Parent = (gethui and gethui()) or game:GetService("CoreGui")
-end)
-if not espFolder.Parent then espFolder.Parent = LocalPlayer:WaitForChild("PlayerGui") end
-
-local function removeESP(inst)
-    local data = tracked[inst]
-    if not data then return end
-    if data.highlight then data.highlight:Destroy() end
-    if data.gui then data.gui:Destroy() end
-    tracked[inst] = nil
-    foundCount = foundCount - 1
+local function scan()
+    local root = Workspace:FindFirstChild("__THINGS") or Workspace
+    local found = {}
+    for _, inst in ipairs(root:GetDescendants()) do
+        if (inst:IsA("BasePart") or inst:IsA("Model")) and matches(inst.Name) then
+            local parent = inst.Parent
+            if not (parent and parent ~= root and matches(parent.Name)) and baseOf(inst) then
+                found[#found + 1] = inst
+            end
+        end
+    end
+    return found
 end
 
-local function addESP(inst)
-    if tracked[inst] then return end
+local espObjects = {} -- [target] = { highlight, tag, label }
 
-    local hl = Instance.new("Highlight")
-    hl.Adornee = inst
-    hl.FillColor = CONFIG.FillColor
-    hl.OutlineColor = CONFIG.OutlineColor
-    hl.FillTransparency = 0.4
-    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    hl.Parent = espFolder
-
-    local gui = Instance.new("BillboardGui")
-    gui.Adornee = inst:IsA("Model") and (inst.PrimaryPart or inst:FindFirstChildWhichIsA("BasePart", true)) or inst
-    gui.Size = UDim2.new(0, 200, 0, 40)
-    gui.StudsOffset = Vector3.new(0, 4, 0)
-    gui.AlwaysOnTop = true
-    gui.Parent = espFolder
-
-    local label = Instance.new("TextLabel")
-    label.BackgroundTransparency = 1
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.Font = Enum.Font.GothamBold
-    label.TextSize = 14
-    label.TextColor3 = Color3.new(1, 1, 1)
-    label.TextStrokeTransparency = 0
-    label.Text = "Dark Matter Ore"
-    label.Parent = gui
-
-    tracked[inst] = { highlight = hl, gui = gui, label = label }
-    foundCount = foundCount + 1
-
-    inst.AncestryChanged:Connect(function(_, parent)
-        if not parent then removeESP(inst) end
-    end)
-
-    notify("Dark Matter Ore", "Found one! Server hopping stopped.", 6)
+local function removeESP(target)
+    local e = espObjects[target]
+    if e then
+        e.highlight:Destroy()
+        e.tag:Destroy()
+        espObjects[target] = nil
+    end
 end
 
--- Distance label updater
+local function clearESP()
+    for target in pairs(espObjects) do removeESP(target) end
+end
+
+local function addESP(target)
+    local part = baseOf(target)
+    if not part then return end
+    local highlight = new("Highlight", {
+        Adornee = target, FillColor = PURPLE, OutlineColor = Color3.new(1, 1, 1),
+        FillTransparency = 0.5, DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
+    }, gui)
+    local tag = new("BillboardGui", {
+        Adornee = part, Size = UDim2.fromOffset(140, 30), StudsOffset = Vector3.new(0, 3, 0),
+        AlwaysOnTop = true,
+    }, gui)
+    local label = new("TextLabel", {
+        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "Dark Matter",
+        TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.3,
+        Font = Enum.Font.GothamBold, TextSize = 13,
+    }, tag)
+    espObjects[target] = { highlight = highlight, tag = tag, label = label }
+end
+
+local function syncESP(targets)
+    local present = {}
+    for _, t in ipairs(targets) do present[t] = true end
+    for target in pairs(espObjects) do
+        if not present[target] or not target.Parent or not State.esp then removeESP(target) end
+    end
+    if State.esp then
+        for _, t in ipairs(targets) do
+            if not espObjects[t] then addESP(t) end
+        end
+    end
+end
+
+-- live distance on tags
 task.spawn(function()
-    while task.wait(0.25) do
+    while gui.Parent do
         local char = LocalPlayer.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if root then
-            for inst, data in pairs(tracked) do
-                local pos = getPosition(inst)
-                if pos then
-                    local d = (pos - root.Position).Magnitude
-                    data.label.Text = string.format("Dark Matter Ore\n[%d studs]", d)
+            for target, e in pairs(espObjects) do
+                local part = baseOf(target)
+                if part then
+                    e.label.Text = ("Dark Matter [%d]"):format(math.floor((part.Position - root.Position).Magnitude))
                 end
             end
         end
+        task.wait(0.25)
     end
 end)
 
--- Initial scan + live detection of newly streamed-in objects
-local function fullScan()
-    for _, inst in ipairs(workspace:GetDescendants()) do
-        if isTarget(inst) then addESP(inst) end
-    end
-end
-
-workspace.DescendantAdded:Connect(function(inst)
-    -- defer so children/properties exist
-    task.defer(function()
-        if inst.Parent and isTarget(inst) then addESP(inst) end
-    end)
-end)
-
----------------------------------------------------------------------
--- Server hop
----------------------------------------------------------------------
-local VISITED_FILE = "dmo_visited.json"
-local visited = {}
-
-pcall(function()
-    if isfile and isfile(VISITED_FILE) then
-        visited = HttpService:JSONDecode(readfile(VISITED_FILE))
-    end
-end)
-visited[game.JobId] = os.time()
--- drop entries older than 30 minutes
-for id, t in pairs(visited) do
-    if os.time() - t > 1800 then visited[id] = nil end
-end
-pcall(function()
-    if writefile then writefile(VISITED_FILE, HttpService:JSONEncode(visited)) end
-end)
-
-local function queueReexecute()
-    if CONFIG.ScriptURL ~= "" then
-        local q = queue_on_teleport or (syn and syn.queue_on_teleport)
-        if q then
-            q(('loadstring(game:HttpGet("%s"))()'):format(CONFIG.ScriptURL))
-        end
-    end
-end
-
-local function pickServer()
-    local cursor = ""
-    for _ = 1, CONFIG.MaxPages do
-        local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100%s")
-            :format(game.PlaceId, cursor ~= "" and ("&cursor=" .. cursor) or "")
-        local body = httpGet(url)
-        if not body then break end
-
-        local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
-        if not ok or not data or not data.data then break end
-
-        local candidates = {}
-        for _, s in ipairs(data.data) do
-            if s.id ~= game.JobId
-                and not visited[s.id]
-                and s.playing
-                and s.maxPlayers
-                and (s.maxPlayers - s.playing) >= CONFIG.MinFreeSlots
-            then
-                table.insert(candidates, s.id)
-            end
-        end
-        if #candidates > 0 then
-            return candidates[math.random(1, #candidates)]
-        end
-
-        cursor = data.nextPageCursor
-        if not cursor then break end
-    end
-    return nil
-end
-
+-- ---------------------- server hop --------------------------
 local hopping = false
+
+local function getServers(cursor)
+    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(PlaceId)
+    if cursor then url = url .. "&cursor=" .. cursor end
+    local ok, res = pcall(function() return HttpService:JSONDecode(game:HttpGet(url)) end)
+    return ok and res or nil
+end
+
 local function hop()
     if hopping then return end
     hopping = true
+    setStatus(YELLOW, "Hopping...", ("Hops: %d"):format(Save.hops))
 
-    local id = pickServer()
-    if not id then
-        notify("Server Hop", "No fresh server found, retrying...", 3)
-        hopping = false
-        return
+    local function try()
+        local cursor
+        for _ = 1, 5 do
+            local data = getServers(cursor)
+            if data and data.data then
+                for _, s in ipairs(data.data) do
+                    if not Save.visited[s.id] and s.playing >= Config.MinPlayers
+                        and (s.playing / s.maxPlayers) <= Config.MaxFillRatio then
+                        Save.visited[s.id] = true
+                        Save.hops += 1
+                        persist()
+                        TeleportService:TeleportToPlaceInstance(PlaceId, s.id, LocalPlayer)
+                        return true
+                    end
+                end
+                cursor = data.nextPageCursor
+                if not cursor then break end
+            else
+                task.wait(2) -- rate limited
+            end
+        end
+        return false
     end
 
-    visited[id] = os.time()
-    pcall(function()
-        if writefile then writefile(VISITED_FILE, HttpService:JSONEncode(visited)) end
-    end)
+    if not try() then
+        Save.visited = { [JobId] = true } -- everything visited, start over
+        persist()
+        task.wait(3)
+        try()
+    end
 
-    queueReexecute()
-    notify("Server Hop", "No ore here. Hopping...", 3)
-    TeleportService:TeleportToPlaceInstance(game.PlaceId, id, LocalPlayer)
+    task.wait(10)
+    hopping = false -- teleport didn't happen; allow retry
 end
 
 TeleportService.TeleportInitFailed:Connect(function()
     hopping = false
+    task.wait(2)
+    hop()
 end)
 
----------------------------------------------------------------------
--- Main loop
----------------------------------------------------------------------
+hopBtn.MouseButton1Click:Connect(function()
+    task.spawn(hop)
+end)
+
+-- ---------------------- main loop ---------------------------
+local startTime = os.clock()
+local noOreSince
+local teleported = {}
+
 task.spawn(function()
-    -- wait for character + let the map stream in
-    LocalPlayer.CharacterAdded:Wait()
-    if not LocalPlayer.Character then LocalPlayer.CharacterAdded:Wait() end
-    task.wait(CONFIG.LoadDelay)
+    while gui.Parent do
+        if not State.enabled then
+            clearESP()
+            noOreSince = nil
+            setStatus(MUTED, "Disabled", ("Hops: %d"):format(Save.hops))
+        else
+            local targets = scan()
+            syncESP(targets)
 
-    local start = os.clock()
-    while os.clock() - start < CONFIG.ScanTime do
-        fullScan()
-        if foundCount > 0 then return end   -- found it, stay here
-        task.wait(1)
-    end
+            if #targets > 0 then
+                noOreSince = nil
+                setStatus(GREEN, "Dark Matter found - mine it!",
+                    ("%d Dark Matter ore(s) - Hops: %d"):format(#targets, Save.hops))
 
-    if CONFIG.AutoHop and foundCount == 0 then
-        while foundCount == 0 do
-            hop()
-            task.wait(5)
+                if Config.AutoTeleport then
+                    local char = LocalPlayer.Character
+                    local root = char and char:FindFirstChild("HumanoidRootPart")
+                    for _, t in ipairs(targets) do
+                        if root and not teleported[t] then
+                            teleported[t] = true
+                            local part = baseOf(t)
+                            if part then root.CFrame = CFrame.new(part.Position + Vector3.new(0, 4, 0)) end
+                            break
+                        end
+                    end
+                end
+            else
+                local scanning = (os.clock() - startTime) < Config.ScanGrace
+                if scanning then
+                    setStatus(YELLOW, "Scanning...", ("0 Dark Matter ore(s) - Hops: %d"):format(Save.hops))
+                else
+                    noOreSince = noOreSince or os.clock()
+                    setStatus(RED, "No Dark Matter here", ("0 Dark Matter ore(s) - Hops: %d"):format(Save.hops))
+                    if State.autoHop and (os.clock() - noOreSince) >= State.hopDelay then
+                        task.spawn(hop)
+                    end
+                end
+            end
         end
+        task.wait(1)
     end
 end)
