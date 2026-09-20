@@ -1,99 +1,494 @@
 --[[
-    DM DIAGNOSTIC - finds out how Dark Matter ore is really represented in the game.
-    HOW TO USE:
-      1. Go into the Black Hole Core mine and stand right next to a Dark Matter ore block.
-      2. Execute this script.
-      3. Open the console (F9 / type /console) - or paste the clipboard contents to me.
+    DM HUNTER - Dark Matter ore detector + server hopper (Pet Simulator 99)
+    Requires an executor with: game:HttpGet (and ideally gethui/writefile/queue_on_teleport)
+
+    GUI:
+      - Enable DM Hunter   : master switch (scanning + status)
+      - Auto server hop    : hop when no Dark Matter ore is left in the server
+      - Ore ESP            : highlight + name/distance tag on every match
+      - Hop delay          : seconds to wait (after nothing is left) before hopping
+      - HOP NOW            : hop immediately
 ]]
 
-local Players   = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
+-- ========================= CONFIG =========================
+local Config = {
+    Keywords     = { "dark matter", "exotic" }, -- matched against each block's "id" attribute (ignores case/spaces)
+    ScanGrace    = 6,                 -- seconds after joining before "nothing found" counts
+    AutoTeleport = false,             -- true = teleport next to each ore once when found
+    MinPlayers   = 1,
+    MaxFillRatio = 0.85,
+    -- Raw URL of THIS script so it re-runs after each hop. "" = disabled.
+    ScriptURL    = "",
+}
+-- ==========================================================
+
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+local Players         = game:GetService("Players")
+local Workspace       = game:GetService("Workspace")
+local TeleportService = game:GetService("TeleportService")
+local HttpService     = game:GetService("HttpService")
+local UserInputService= game:GetService("UserInputService")
+local TweenService    = game:GetService("TweenService")
+local RunService      = game:GetService("RunService")
+local CoreGui         = game:GetService("CoreGui")
+
 local LocalPlayer = Players.LocalPlayer
+local PlaceId, JobId = game.PlaceId, game.JobId
 
-local out = {}
-local function log(s)
-    out[#out + 1] = s
-    print("[DM DIAG] " .. s)
-end
+-- ---------------------- persistence -------------------------
+local SAVE_FILE = "dm_hunter.json"
+local Save = { hops = 0, visited = {}, enabled = true, autoHop = true, esp = true, hopDelay = 4 }
 
-local function norm(s)
-    return (tostring(s):lower():gsub("[^%w]", ""))
-end
-local function hasDM(s)
-    return norm(s):find("darkmatter", 1, true) ~= nil
-end
-
-local function attrString(inst)
-    local parts = {}
-    for k, v in pairs(inst:GetAttributes()) do
-        parts[#parts + 1] = tostring(k) .. "=" .. tostring(v)
+pcall(function()
+    if isfile and isfile(SAVE_FILE) then
+        local data = HttpService:JSONDecode(readfile(SAVE_FILE))
+        for k, v in pairs(data) do Save[k] = v end
     end
-    return table.concat(parts, ", ")
+end)
+Save.visited[JobId] = true
+
+local function persist()
+    pcall(function()
+        if writefile then writefile(SAVE_FILE, HttpService:JSONEncode(Save)) end
+    end)
 end
 
-local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-log("PlaceId: " .. game.PlaceId .. " | StreamingEnabled: " .. tostring(Workspace.StreamingEnabled))
-log(root and ("Player position: " .. tostring(root.Position)) or "No HumanoidRootPart found!")
+local queueTeleport = queue_on_teleport or (syn and syn.queue_on_teleport)
+if queueTeleport and Config.ScriptURL ~= "" then
+    queueTeleport(("loadstring(game:HttpGet(%q))()"):format(Config.ScriptURL))
+end
 
--- 1) anything anywhere in the workspace that mentions "dark matter"
-log("---- SECTION 1: objects mentioning 'dark matter' (name / attribute / value / text) ----")
-local hits = 0
-for _, inst in ipairs(Workspace:GetDescendants()) do
-    if hits >= 150 then log("(capped at 150 results)") break end
+-- ---------------------- GUI ---------------------------------
+local PURPLE = Color3.fromRGB(139, 92, 246)
+local GRAYOFF = Color3.fromRGB(70, 70, 78)
+local PINK   = Color3.fromRGB(255, 107, 129)
+local GREEN  = Color3.fromRGB(74, 222, 128)
+local YELLOW = Color3.fromRGB(250, 204, 21)
+local RED    = Color3.fromRGB(248, 113, 113)
+local PANEL  = Color3.fromRGB(28, 28, 30)
+local TEXT   = Color3.fromRGB(235, 235, 240)
+local MUTED  = Color3.fromRGB(150, 150, 160)
 
-    local reason
-    if hasDM(inst.Name) then
-        reason = "name"
-    elseif inst:IsA("StringValue") and hasDM(inst.Value) then
-        reason = "StringValue=" .. inst.Value
-    elseif (inst:IsA("TextLabel") or inst:IsA("TextButton")) and hasDM(inst.Text) then
-        reason = "text=" .. inst.Text
-    else
-        for k, v in pairs(inst:GetAttributes()) do
-            if hasDM(k) or (type(v) == "string" and hasDM(v)) then
-                reason = "attribute " .. tostring(k) .. "=" .. tostring(v)
-                break
+local function new(class, props, parent)
+    local inst = Instance.new(class)
+    for k, v in pairs(props) do inst[k] = v end
+    inst.Parent = parent
+    return inst
+end
+
+local function corner(inst, r)
+    new("UICorner", { CornerRadius = UDim.new(0, r) }, inst)
+end
+
+local guiParent = (gethui and gethui()) or (pcall(function() return CoreGui.Name end) and CoreGui) or LocalPlayer:WaitForChild("PlayerGui")
+local old = guiParent:FindFirstChild("DMHunterGui")
+if old then old:Destroy() end
+
+local gui = new("ScreenGui", { Name = "DMHunterGui", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, guiParent)
+
+local panel = new("Frame", {
+    Size = UDim2.fromOffset(264, 300),
+    Position = UDim2.new(0, 20, 0.5, -150),
+    BackgroundColor3 = PANEL,
+    BorderSizePixel = 0,
+}, gui)
+corner(panel, 12)
+new("UIStroke", { Color = Color3.fromRGB(50, 50, 56), Thickness = 1 }, panel)
+
+local title = new("TextLabel", {
+    Size = UDim2.new(1, -32, 0, 24),
+    Position = UDim2.new(0, 16, 0, 10),
+    BackgroundTransparency = 1,
+    Text = "DM HUNTER",
+    TextColor3 = MUTED,
+    Font = Enum.Font.GothamBold,
+    TextSize = 12,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, panel)
+
+-- drag panel by title
+do
+    local dragging, dragStart, startPos
+    title.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging, dragStart, startPos = true, input.Position, panel.Position
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local d = input.Position - dragStart
+            panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+local function makeToggle(label, y, default, onChange)
+    local row = new("Frame", { Size = UDim2.new(1, -32, 0, 26), Position = UDim2.new(0, 16, 0, y), BackgroundTransparency = 1 }, panel)
+    new("TextLabel", {
+        Size = UDim2.new(1, -56, 1, 0), BackgroundTransparency = 1, Text = label,
+        TextColor3 = TEXT, Font = Enum.Font.GothamMedium, TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+    }, row)
+    local pill = new("TextButton", {
+        Size = UDim2.fromOffset(44, 22), Position = UDim2.new(1, -44, 0.5, -11),
+        Text = "", AutoButtonColor = false, BackgroundColor3 = GRAYOFF,
+    }, row)
+    corner(pill, 11)
+    local knob = new("Frame", { Size = UDim2.fromOffset(16, 16), BackgroundColor3 = Color3.new(1, 1, 1) }, pill)
+    corner(knob, 8)
+
+    local value = default
+    local function render()
+        local info = TweenInfo.new(0.12)
+        TweenService:Create(pill, info, { BackgroundColor3 = value and PURPLE or GRAYOFF }):Play()
+        TweenService:Create(knob, info, { Position = value and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8) }):Play()
+    end
+    knob.Position = value and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
+    pill.BackgroundColor3 = value and PURPLE or GRAYOFF
+
+    pill.MouseButton1Click:Connect(function()
+        value = not value
+        render()
+        onChange(value)
+    end)
+end
+
+-- state (mirrors saved settings)
+local State = { enabled = Save.enabled, autoHop = Save.autoHop, esp = Save.esp, hopDelay = Save.hopDelay }
+
+makeToggle("Enable DM Hunter", 40, State.enabled, function(v) State.enabled = v; Save.enabled = v; persist() end)
+makeToggle("Auto server hop", 72, State.autoHop, function(v) State.autoHop = v; Save.autoHop = v; persist() end)
+makeToggle("Ore ESP", 104, State.esp, function(v) State.esp = v; Save.esp = v; persist() end)
+
+-- slider
+new("TextLabel", {
+    Size = UDim2.new(1, -100, 0, 18), Position = UDim2.new(0, 16, 0, 146), BackgroundTransparency = 1,
+    Text = "Hop delay (seconds)", TextColor3 = TEXT, Font = Enum.Font.GothamMedium, TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, panel)
+local valueLabel = new("TextLabel", {
+    Size = UDim2.fromOffset(60, 18), Position = UDim2.new(1, -76, 0, 146), BackgroundTransparency = 1,
+    Text = string.format("%.1f", State.hopDelay), TextColor3 = TEXT, Font = Enum.Font.GothamBold, TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Right,
+}, panel)
+
+do
+    local MIN, MAX, STEP = 1, 10, 0.5
+    local track = new("Frame", {
+        Size = UDim2.new(1, -32, 0, 4), Position = UDim2.new(0, 16, 0, 180),
+        BackgroundColor3 = Color3.fromRGB(60, 60, 66), BorderSizePixel = 0,
+    }, panel)
+    corner(track, 2)
+    local hit = new("TextButton", { -- bigger click area
+        Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 0.5, -12), BackgroundTransparency = 1, Text = "",
+    }, track)
+    local knob = new("Frame", {
+        Size = UDim2.fromOffset(14, 14), AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.new((State.hopDelay - MIN) / (MAX - MIN), 0, 0.5, 0),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+    }, track)
+    corner(knob, 7)
+
+    local dragging = false
+    local function setFromX(x)
+        local alpha = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        local v = MIN + alpha * (MAX - MIN)
+        v = math.floor(v / STEP + 0.5) * STEP
+        State.hopDelay = v
+        Save.hopDelay = v
+        knob.Position = UDim2.new((v - MIN) / (MAX - MIN), 0, 0.5, 0)
+        valueLabel.Text = string.format("%.1f", v)
+    end
+    hit.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            setFromX(input.Position.X)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            setFromX(input.Position.X)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+            dragging = false
+            persist()
+        end
+    end)
+end
+
+-- status
+local dot = new("Frame", {
+    Size = UDim2.fromOffset(10, 10), Position = UDim2.new(0, 16, 0, 209), BackgroundColor3 = YELLOW,
+}, panel)
+corner(dot, 5)
+local statusLabel = new("TextLabel", {
+    Size = UDim2.new(1, -44, 0, 18), Position = UDim2.new(0, 34, 0, 205), BackgroundTransparency = 1,
+    Text = "Scanning...", TextColor3 = YELLOW, Font = Enum.Font.GothamBold, TextSize = 13,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, panel)
+local subLabel = new("TextLabel", {
+    Size = UDim2.new(1, -44, 0, 16), Position = UDim2.new(0, 34, 0, 226), BackgroundTransparency = 1,
+    Text = "", TextColor3 = MUTED, Font = Enum.Font.Gotham, TextSize = 11,
+    TextXAlignment = Enum.TextXAlignment.Left,
+}, panel)
+
+local function setStatus(color, text, sub)
+    dot.BackgroundColor3 = color
+    statusLabel.TextColor3 = color
+    statusLabel.Text = text
+    subLabel.Text = sub or ""
+end
+
+local hopBtn = new("TextButton", {
+    Size = UDim2.new(1, -32, 0, 36), Position = UDim2.new(0, 16, 1, -52),
+    BackgroundColor3 = PINK, Text = "HOP NOW", TextColor3 = Color3.new(1, 1, 1),
+    Font = Enum.Font.GothamBold, TextSize = 13, AutoButtonColor = true,
+}, panel)
+corner(hopBtn, 8)
+
+-- ---------------------- scanning + ESP ----------------------
+local function normalize(s)
+    return (s:lower():gsub("[^%w]", "")) -- drop spaces, underscores, symbols
+end
+
+local normKeywords = {}
+for _, kw in ipairs(Config.Keywords) do
+    table.insert(normKeywords, normalize(kw))
+end
+
+local function matches(name)
+    name = normalize(name)
+    for _, kw in ipairs(normKeywords) do
+        if name:find(kw, 1, true) then return true end
+    end
+    return false
+end
+
+local function baseOf(inst)
+    if inst:IsA("BasePart") then return inst end
+    if inst:IsA("Model") then
+        return inst.PrimaryPart or inst:FindFirstChildWhichIsA("BasePart", true)
+    end
+end
+
+local seenIds = {}
+
+-- Mine blocks live in Workspace.__THINGS.BlockWorlds.Blocks_N and store their
+-- ore type in the "id" attribute (e.g. id=Gold, id=Sapphire).
+-- Returns: list of matching blocks, total number of loaded blocks.
+local function scan()
+    local things = Workspace:FindFirstChild("__THINGS")
+    local worlds = things and things:FindFirstChild("BlockWorlds")
+    local found, blockCount = {}, 0
+    if not worlds then return found, 0 end
+
+    for _, folder in ipairs(worlds:GetChildren()) do
+        for _, block in ipairs(folder:GetChildren()) do
+            local id = block:GetAttribute("id")
+            if id ~= nil then
+                blockCount += 1
+                id = tostring(id)
+                if not seenIds[id] then
+                    seenIds[id] = true
+                    print("[DM Hunter] block id seen:", id) -- check F9 to see the real Dark Matter id
+                end
+                if matches(id) then
+                    found[#found + 1] = block
+                end
             end
         end
     end
+    return found, blockCount
+end
 
-    if reason then
-        hits += 1
-        log(("%s [%s] via %s"):format(inst:GetFullName(), inst.ClassName, reason))
+local espObjects = {} -- [target] = { highlight, tag, label }
+
+local function removeESP(target)
+    local e = espObjects[target]
+    if e then
+        e.highlight:Destroy()
+        e.tag:Destroy()
+        espObjects[target] = nil
     end
 end
-if hits == 0 then
-    log("NOTHING in Workspace mentions 'dark matter'. The ore is probably named by an ID/number, or not loaded (streaming), or you're not in the right mine.")
+
+local function clearESP()
+    for target in pairs(espObjects) do removeESP(target) end
 end
 
--- 2) what is physically around the player
-log("---- SECTION 2: nearest parts to the player (within 40 studs) ----")
-if root then
-    local near = {}
-    local char = LocalPlayer.Character
-    for _, part in ipairs(Workspace:GetDescendants()) do
-        if part:IsA("BasePart") and not part:IsDescendantOf(char) then
-            local d = (part.Position - root.Position).Magnitude
-            if d <= 40 then near[#near + 1] = { part = part, dist = d } end
+local function addESP(target)
+    local part = baseOf(target)
+    if not part then return end
+    local highlight = new("Highlight", {
+        Adornee = target, FillColor = PURPLE, OutlineColor = Color3.new(1, 1, 1),
+        FillTransparency = 0.5, DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
+    }, gui)
+    local tag = new("BillboardGui", {
+        Adornee = part, Size = UDim2.fromOffset(140, 30), StudsOffset = Vector3.new(0, 3, 0),
+        AlwaysOnTop = true,
+    }, gui)
+    local label = new("TextLabel", {
+        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "Dark Matter",
+        TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.3,
+        Font = Enum.Font.GothamBold, TextSize = 13,
+    }, tag)
+    espObjects[target] = { highlight = highlight, tag = tag, label = label }
+end
+
+local function syncESP(targets)
+    local present = {}
+    for _, t in ipairs(targets) do present[t] = true end
+    for target in pairs(espObjects) do
+        if not present[target] or not target.Parent or not State.esp then removeESP(target) end
+    end
+    if State.esp then
+        local count = 0
+        for _ in pairs(espObjects) do count += 1 end
+        for _, t in ipairs(targets) do
+            if not espObjects[t] and count < 30 then -- Roblox caps active Highlights
+                addESP(t)
+                count += 1
+            end
         end
     end
-    table.sort(near, function(a, b) return a.dist < b.dist end)
-    for i = 1, math.min(25, #near) do
-        local p = near[i].part
-        log(("%.1f studs | %s [%s] | color=%s | material=%s | attrs: %s"):format(
-            near[i].dist, p:GetFullName(), p.ClassName,
-            tostring(p.Color), tostring(p.Material), attrString(p)))
-        local parent = p.Parent
-        if parent and parent ~= Workspace then
-            log("     parent attrs: " .. attrString(parent))
-        end
-    end
-    if #near == 0 then
-        log("No parts within 40 studs - map is probably not streamed in, or blocks aren't BaseParts (could be terrain/voxels).")
-    end
 end
 
-if setclipboard then
-    setclipboard(table.concat(out, "\n"))
-    print("[DM DIAG] Results copied to clipboard.")
+-- live distance on tags
+task.spawn(function()
+    while gui.Parent do
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root then
+            for target, e in pairs(espObjects) do
+                local part = baseOf(target)
+                if part then
+                    e.label.Text = ("Dark Matter [%d]"):format(math.floor((part.Position - root.Position).Magnitude))
+                end
+            end
+        end
+        task.wait(0.25)
+    end
+end)
+
+-- ---------------------- server hop --------------------------
+local hopping = false
+
+local function getServers(cursor)
+    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(PlaceId)
+    if cursor then url = url .. "&cursor=" .. cursor end
+    local ok, res = pcall(function() return HttpService:JSONDecode(game:HttpGet(url)) end)
+    return ok and res or nil
 end
+
+local function hop()
+    if hopping then return end
+    hopping = true
+    setStatus(YELLOW, "Hopping...", ("Hops: %d"):format(Save.hops))
+
+    local function try()
+        local cursor
+        for _ = 1, 5 do
+            local data = getServers(cursor)
+            if data and data.data then
+                for _, s in ipairs(data.data) do
+                    if not Save.visited[s.id] and s.playing >= Config.MinPlayers
+                        and (s.playing / s.maxPlayers) <= Config.MaxFillRatio then
+                        Save.visited[s.id] = true
+                        Save.hops += 1
+                        persist()
+                        TeleportService:TeleportToPlaceInstance(PlaceId, s.id, LocalPlayer)
+                        return true
+                    end
+                end
+                cursor = data.nextPageCursor
+                if not cursor then break end
+            else
+                task.wait(2) -- rate limited
+            end
+        end
+        return false
+    end
+
+    if not try() then
+        Save.visited = { [JobId] = true } -- everything visited, start over
+        persist()
+        task.wait(3)
+        try()
+    end
+
+    task.wait(10)
+    hopping = false -- teleport didn't happen; allow retry
+end
+
+TeleportService.TeleportInitFailed:Connect(function()
+    hopping = false
+    task.wait(2)
+    hop()
+end)
+
+hopBtn.MouseButton1Click:Connect(function()
+    task.spawn(hop)
+end)
+
+-- ---------------------- main loop ---------------------------
+local startTime = os.clock()
+local noOreSince
+local mineSince -- when mine blocks first loaded (grace period starts here)
+local teleported = {}
+
+task.spawn(function()
+    while gui.Parent do
+        if not State.enabled then
+            clearESP()
+            noOreSince = nil
+            setStatus(MUTED, "Disabled", ("Hops: %d"):format(Save.hops))
+        else
+            local targets, blockCount = scan()
+            syncESP(targets)
+            if blockCount > 0 then mineSince = mineSince or os.clock() else mineSince = nil end
+
+            if blockCount == 0 then
+                -- not inside a mine (or blocks not streamed in yet): don't hop
+                noOreSince = nil
+                setStatus(YELLOW, "Enter the Black Hole Core", ("No mine blocks loaded - Hops: %d"):format(Save.hops))
+            elseif #targets > 0 then
+                noOreSince = nil
+                setStatus(GREEN, "Dark Matter found - mine it!",
+                    ("%d Dark Matter ore(s) - Hops: %d"):format(#targets, Save.hops))
+
+                if Config.AutoTeleport then
+                    local char = LocalPlayer.Character
+                    local root = char and char:FindFirstChild("HumanoidRootPart")
+                    for _, t in ipairs(targets) do
+                        if root and not teleported[t] then
+                            teleported[t] = true
+                            local part = baseOf(t)
+                            if part then root.CFrame = CFrame.new(part.Position + Vector3.new(0, 4, 0)) end
+                            break
+                        end
+                    end
+                end
+            else
+                local scanning = (os.clock() - (mineSince or startTime)) < Config.ScanGrace
+                if scanning then
+                    setStatus(YELLOW, "Scanning...", ("0 Dark Matter ore(s) - Hops: %d"):format(Save.hops))
+                else
+                    noOreSince = noOreSince or os.clock()
+                    setStatus(RED, "No Dark Matter here", ("0 Dark Matter ore(s) - Hops: %d"):format(Save.hops))
+                    if State.autoHop and (os.clock() - noOreSince) >= State.hopDelay then
+                        task.spawn(hop)
+                    end
+                end
+            end
+        end
+        task.wait(1)
+    end
+end)
