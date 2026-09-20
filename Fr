@@ -15,7 +15,7 @@ print("[DM Hunter] starting...")
 
 -- ========================= CONFIG =========================
 local Config = {
-    Keywords     = { "dark matter", "exotic" }, -- matched against each block's "id" attribute (ignores case/spaces)
+    Keywords     = { "rainbow", "dark matter" }, -- matched against each block's "id" attribute (ignores case/spaces)
     ScanGrace    = 6,                 -- seconds after joining before "nothing found" counts
     AutoTeleport = false,             -- true = teleport next to each ore once when found
     MinPlayers   = 1,
@@ -343,7 +343,7 @@ local function addESP(target)
         TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.3,
         Font = Enum.Font.GothamBold, TextSize = 13,
     }, tag)
-    espObjects[target] = { highlight = highlight, tag = tag, label = label }
+    espObjects[target] = { highlight = highlight, tag = tag, label = label, id = tostring(target:GetAttribute("id") or "?") }
 end
 
 local function syncESP(targets)
@@ -373,7 +373,7 @@ task.spawn(function()
             for target, e in pairs(espObjects) do
                 local part = baseOf(target)
                 if part then
-                    e.label.Text = ("Dark Matter [%d]"):format(math.floor((part.Position - root.Position).Magnitude))
+                    e.label.Text = ("%s [%d]"):format(e.id, math.floor((part.Position - root.Position).Magnitude))
                 end
             end
         end
