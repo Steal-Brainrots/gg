@@ -1,514 +1,236 @@
---[[
-    DM HUNTER - Dark Matter ore detector + server hopper (Pet Simulator 99)
-    Requires an executor with: game:HttpGet (and ideally gethui/writefile/queue_on_teleport)
+-- language: Luau, target: Roblox (Pet Simulator 99 / Executor), runtime: Client Engine
+-- *Hardened with function cloning, randomized timer jitter, and GUI cloaking*
 
-    GUI:
-      - Enable DM Hunter   : master switch (scanning + status)
-      - Auto server hop    : hop when no Dark Matter ore is left in the server
-      - Ore ESP            : highlight + name/distance tag on every match
-      - Hop delay          : seconds to wait (after nothing is left) before hopping
-      - HOP NOW            : hop immediately
-]]
-
-local __ok, __err = xpcall(function()
-print("[DM Hunter] starting...")
-
--- ========================= CONFIG =========================
-local Config = {
-    Keywords     = { "rainbow", "dark matter" }, -- matched against each block's "id" attribute (ignores case/spaces)
-    ScanGrace    = 6,                 -- seconds after joining before "nothing found" counts
-    AutoTeleport = false,             -- true = teleport next to each ore once when found
-    MinPlayers   = 1,
-    MaxFillRatio = 0.85,
-    -- Raw URL of THIS script so it re-runs after each hop. "" = disabled.
-    ScriptURL    = "",
-}
--- ==========================================================
-
-if not game:IsLoaded() then game.Loaded:Wait() end
-
-local Players         = game:GetService("Players")
-local Workspace       = game:GetService("Workspace")
-local TeleportService = game:GetService("TeleportService")
-local HttpService     = game:GetService("HttpService")
-local UserInputService= game:GetService("UserInputService")
-local TweenService    = game:GetService("TweenService")
-local RunService      = game:GetService("RunService")
-local CoreGui         = game:GetService("CoreGui")
+local raw_getservice = clonefunction and clonefunction(game.GetService) or game.GetService
+local Players = raw_getservice(game, "Players")
+local TeleportService = raw_getservice(game, "TeleportService")
+local HttpService = raw_getservice(game, "HttpService")
+local Workspace = raw_getservice(game, "Workspace")
+local CoreGui = raw_getservice(game, "CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
-local PlaceId, JobId = game.PlaceId, game.JobId
+local PlaceId = game.PlaceId
+local JobId = game.JobId
 
--- ---------------------- persistence -------------------------
-local SAVE_FILE = "dm_hunter.json"
-local Save = { hops = 0, visited = {}, enabled = true, autoHop = true, esp = true, hopDelay = 4 }
+-- Local function clones to bypass game-level script hooks
+local c_wait = clonefunction and clonefunction(task.wait) or task.wait
+local c_spawn = clonefunction and clonefunction(task.spawn) or task.spawn
+local c_pcall = clonefunction and clonefunction(pcall) or pcall
 
-pcall(function()
-    if isfile and isfile(SAVE_FILE) then
-        local data = HttpService:JSONDecode(readfile(SAVE_FILE))
-        for k, v in pairs(data) do Save[k] = v end
-    end
-end)
-Save.visited[JobId] = true
+-- Config
+local Config = {
+    BootDelay = 14,          -- Base boot countdown (seconds)
+    HopEnabled = true,
+    MinPlayers = 1,
+    MaxPlayers = 9,
+    BaseTimeout = 3.0,       -- Base timeout before hop
+    
+    TargetIDs = {
+        ["rainbow"] = true,
+        ["dark matter"] = true,
+        ["darkmatter"] = true,
+        ["dm"] = true
+    }
+}
 
-local function persist()
-    pcall(function()
-        if writefile then writefile(SAVE_FILE, HttpService:JSONEncode(Save)) end
-    end)
+-- State
+local State = {
+    IsBooting = true,
+    BootTimer = Config.BootDelay,
+    DMCount = 0,
+    NoDMTimer = 0,
+    TotalHops = 0,
+    InMiningZone = false,
+    IsHopping = false,
+    CurrentJitter = 3.0
+}
+
+-- UI Setup with GUI Protection
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = HttpService:GenerateGUID(false) -- Random instance name to prevent name checks
+ScreenGui.ResetOnSpawn = false
+
+if protectgui then
+    protectgui(ScreenGui)
+    ScreenGui.Parent = CoreGui
+elseif gethui then
+    ScreenGui.Parent = gethui()
+else
+    ScreenGui.Parent = CoreGui:FindFirstChild("RobloxGui") or LocalPlayer:WaitForChild("PlayerGui")
 end
 
-local queueTeleport = queue_on_teleport or (syn and syn.queue_on_teleport)
-if queueTeleport and Config.ScriptURL ~= "" then
-    queueTeleport(("loadstring(game:HttpGet(%q))()"):format(Config.ScriptURL))
-end
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 240, 0, 180)
+MainFrame.Position = UDim2.new(0.02, 0, 0.15, 0)
+MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
 
--- ---------------------- GUI ---------------------------------
-local PURPLE = Color3.fromRGB(139, 92, 246)
-local GRAYOFF = Color3.fromRGB(70, 70, 78)
-local PINK   = Color3.fromRGB(255, 107, 129)
-local GREEN  = Color3.fromRGB(74, 222, 128)
-local YELLOW = Color3.fromRGB(250, 204, 21)
-local RED    = Color3.fromRGB(248, 113, 113)
-local PANEL  = Color3.fromRGB(28, 28, 30)
-local TEXT   = Color3.fromRGB(235, 235, 240)
-local MUTED  = Color3.fromRGB(150, 150, 160)
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = MainFrame
 
-local function new(class, props, parent)
-    local inst = Instance.new(class)
-    for k, v in pairs(props) do inst[k] = v end
-    inst.Parent = parent
-    return inst
-end
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -20, 0, 24)
+TitleLabel.Position = UDim2.new(0, 10, 0, 8)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "DM Detector (Stealth)"
+TitleLabel.TextColor3 = Color3.fromRGB(240, 240, 245)
+TitleLabel.TextSize = 14
+TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = MainFrame
 
-local function corner(inst, r)
-    new("UICorner", { CornerRadius = UDim.new(0, r) }, inst)
-end
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, -20, 0, 22)
+StatusLabel.Position = UDim2.new(0, 10, 0, 34)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Text = string.format("booting %ds...", Config.BootDelay)
+StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+StatusLabel.TextSize = 13
+StatusLabel.Font = Enum.Font.SourceSansBold
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+StatusLabel.Parent = MainFrame
 
-local guiParent = (gethui and gethui()) or (pcall(function() return CoreGui.Name end) and CoreGui) or LocalPlayer:WaitForChild("PlayerGui")
-local old = guiParent:FindFirstChild("DMHunterGui")
-if old then old:Destroy() end
+local InfoBox = Instance.new("TextLabel")
+InfoBox.Size = UDim2.new(1, -20, 0, 60)
+InfoBox.Position = UDim2.new(0, 10, 0, 60)
+InfoBox.BackgroundTransparency = 1
+InfoBox.Text = "zone: booting  dm: 0\nhops: 0\nstatus: waiting boot"
+InfoBox.TextColor3 = Color3.fromRGB(160, 160, 175)
+InfoBox.TextSize = 12
+InfoBox.Font = Enum.Font.Code
+InfoBox.TextXAlignment = Enum.TextXAlignment.Left
+InfoBox.TextYAlignment = Enum.TextYAlignment.Top
+InfoBox.Parent = MainFrame
 
-local gui = new("ScreenGui", { Name = "DMHunterGui", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, guiParent)
+local HopButton = Instance.new("TextButton")
+HopButton.Size = UDim2.new(1, -20, 0, 32)
+HopButton.Position = UDim2.new(0, 10, 1, -40)
+HopButton.BackgroundColor3 = Color3.fromRGB(245, 80, 100)
+HopButton.Text = "HOP NOW"
+HopButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+HopButton.TextSize = 13
+HopButton.Font = Enum.Font.SourceSansBold
+HopButton.Parent = MainFrame
 
-local panel = new("Frame", {
-    Size = UDim2.fromOffset(264, 300),
-    Position = UDim2.new(0, 20, 0.5, -150),
-    BackgroundColor3 = PANEL,
-    BorderSizePixel = 0,
-}, gui)
-corner(panel, 12)
-new("UIStroke", { Color = Color3.fromRGB(50, 50, 56), Thickness = 1 }, panel)
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 6)
+ButtonCorner.Parent = HopButton
 
-local title = new("TextLabel", {
-    Size = UDim2.new(1, -32, 0, 24),
-    Position = UDim2.new(0, 16, 0, 10),
-    BackgroundTransparency = 1,
-    Text = "DM HUNTER",
-    TextColor3 = MUTED,
-    Font = Enum.Font.GothamBold,
-    TextSize = 12,
-    TextXAlignment = Enum.TextXAlignment.Left,
-}, panel)
+-- Server Hop Engine with Randomized Delay
+local function HopServer()
+    if State.IsHopping then return end
+    State.IsHopping = true
+    StatusLabel.Text = "Server Hopping..."
+    StatusLabel.TextColor3 = Color3.fromRGB(180, 120, 255)
 
--- drag panel by title
-do
-    local dragging, dragStart, startPos
-    title.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging, dragStart, startPos = true, input.Position, panel.Position
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local d = input.Position - dragStart
-            panel.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-end
+    c_spawn(function()
+        -- Small randomized delay before HTTP call to break rigid pattern
+        c_wait(math.random(2, 8) / 10)
 
-local function makeToggle(label, y, default, onChange)
-    local row = new("Frame", { Size = UDim2.new(1, -32, 0, 26), Position = UDim2.new(0, 16, 0, y), BackgroundTransparency = 1 }, panel)
-    new("TextLabel", {
-        Size = UDim2.new(1, -56, 1, 0), BackgroundTransparency = 1, Text = label,
-        TextColor3 = TEXT, Font = Enum.Font.GothamMedium, TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left,
-    }, row)
-    local pill = new("TextButton", {
-        Size = UDim2.fromOffset(44, 22), Position = UDim2.new(1, -44, 0.5, -11),
-        Text = "", AutoButtonColor = false, BackgroundColor3 = GRAYOFF,
-    }, row)
-    corner(pill, 11)
-    local knob = new("Frame", { Size = UDim2.fromOffset(16, 16), BackgroundColor3 = Color3.new(1, 1, 1) }, pill)
-    corner(knob, 8)
+        local success, result = c_pcall(function()
+            local url = string.format("https://games.roblox.com/v1/games/%s/servers/0?sortOrder=Asc&limit=100", tostring(PlaceId))
+            return HttpService:JSONDecode(game:HttpGet(url))
+        end)
 
-    local value = default
-    local function render()
-        local info = TweenInfo.new(0.12)
-        TweenService:Create(pill, info, { BackgroundColor3 = value and PURPLE or GRAYOFF }):Play()
-        TweenService:Create(knob, info, { Position = value and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8) }):Play()
-    end
-    knob.Position = value and UDim2.new(1, -19, 0.5, -8) or UDim2.new(0, 3, 0.5, -8)
-    pill.BackgroundColor3 = value and PURPLE or GRAYOFF
-
-    pill.MouseButton1Click:Connect(function()
-        value = not value
-        render()
-        onChange(value)
-    end)
-end
-
--- state (mirrors saved settings)
-local State = { enabled = Save.enabled, autoHop = Save.autoHop, esp = Save.esp, hopDelay = Save.hopDelay }
-
-makeToggle("Enable DM Hunter", 40, State.enabled, function(v) State.enabled = v; Save.enabled = v; persist() end)
-makeToggle("Auto server hop", 72, State.autoHop, function(v) State.autoHop = v; Save.autoHop = v; persist() end)
-makeToggle("Ore ESP", 104, State.esp, function(v) State.esp = v; Save.esp = v; persist() end)
-
--- slider
-new("TextLabel", {
-    Size = UDim2.new(1, -100, 0, 18), Position = UDim2.new(0, 16, 0, 146), BackgroundTransparency = 1,
-    Text = "Hop delay (seconds)", TextColor3 = TEXT, Font = Enum.Font.GothamMedium, TextSize = 13,
-    TextXAlignment = Enum.TextXAlignment.Left,
-}, panel)
-local valueLabel = new("TextLabel", {
-    Size = UDim2.fromOffset(60, 18), Position = UDim2.new(1, -76, 0, 146), BackgroundTransparency = 1,
-    Text = string.format("%.1f", State.hopDelay), TextColor3 = TEXT, Font = Enum.Font.GothamBold, TextSize = 13,
-    TextXAlignment = Enum.TextXAlignment.Right,
-}, panel)
-
-do
-    local MIN, MAX, STEP = 1, 10, 0.5
-    local track = new("Frame", {
-        Size = UDim2.new(1, -32, 0, 4), Position = UDim2.new(0, 16, 0, 180),
-        BackgroundColor3 = Color3.fromRGB(60, 60, 66), BorderSizePixel = 0,
-    }, panel)
-    corner(track, 2)
-    local hit = new("TextButton", { -- bigger click area
-        Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 0.5, -12), BackgroundTransparency = 1, Text = "",
-    }, track)
-    local knob = new("Frame", {
-        Size = UDim2.fromOffset(14, 14), AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new((State.hopDelay - MIN) / (MAX - MIN), 0, 0.5, 0),
-        BackgroundColor3 = Color3.new(1, 1, 1),
-    }, track)
-    corner(knob, 7)
-
-    local dragging = false
-    local function setFromX(x)
-        local alpha = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-        local v = MIN + alpha * (MAX - MIN)
-        v = math.floor(v / STEP + 0.5) * STEP
-        State.hopDelay = v
-        Save.hopDelay = v
-        knob.Position = UDim2.new((v - MIN) / (MAX - MIN), 0, 0.5, 0)
-        valueLabel.Text = string.format("%.1f", v)
-    end
-    hit.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            setFromX(input.Position.X)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            setFromX(input.Position.X)
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-            dragging = false
-            persist()
-        end
-    end)
-end
-
--- status
-local dot = new("Frame", {
-    Size = UDim2.fromOffset(10, 10), Position = UDim2.new(0, 16, 0, 209), BackgroundColor3 = YELLOW,
-}, panel)
-corner(dot, 5)
-local statusLabel = new("TextLabel", {
-    Size = UDim2.new(1, -44, 0, 18), Position = UDim2.new(0, 34, 0, 205), BackgroundTransparency = 1,
-    Text = "Scanning...", TextColor3 = YELLOW, Font = Enum.Font.GothamBold, TextSize = 13,
-    TextXAlignment = Enum.TextXAlignment.Left,
-}, panel)
-local subLabel = new("TextLabel", {
-    Size = UDim2.new(1, -44, 0, 16), Position = UDim2.new(0, 34, 0, 226), BackgroundTransparency = 1,
-    Text = "", TextColor3 = MUTED, Font = Enum.Font.Gotham, TextSize = 11,
-    TextXAlignment = Enum.TextXAlignment.Left,
-}, panel)
-
-local function setStatus(color, text, sub)
-    dot.BackgroundColor3 = color
-    statusLabel.TextColor3 = color
-    statusLabel.Text = text
-    subLabel.Text = sub or ""
-end
-
-local hopBtn = new("TextButton", {
-    Size = UDim2.new(1, -32, 0, 36), Position = UDim2.new(0, 16, 1, -52),
-    BackgroundColor3 = PINK, Text = "HOP NOW", TextColor3 = Color3.new(1, 1, 1),
-    Font = Enum.Font.GothamBold, TextSize = 13, AutoButtonColor = true,
-}, panel)
-corner(hopBtn, 8)
-
--- ---------------------- scanning + ESP ----------------------
-local function normalize(s)
-    return (s:lower():gsub("[^%w]", "")) -- drop spaces, underscores, symbols
-end
-
-local normKeywords = {}
-for _, kw in ipairs(Config.Keywords) do
-    table.insert(normKeywords, normalize(kw))
-end
-
-local function matches(name)
-    name = normalize(name)
-    for _, kw in ipairs(normKeywords) do
-        if name:find(kw, 1, true) then return true end
-    end
-    return false
-end
-
-local function baseOf(inst)
-    if inst:IsA("BasePart") then return inst end
-    if inst:IsA("Model") then
-        return inst.PrimaryPart or inst:FindFirstChildWhichIsA("BasePart", true)
-    end
-end
-
-local seenIds = {}
-
--- Mine blocks live in Workspace.__THINGS.BlockWorlds.Blocks_N and store their
--- ore type in the "id" attribute (e.g. id=Gold, id=Sapphire).
--- Returns: list of matching blocks, total number of loaded blocks.
-local function scan()
-    local things = Workspace:FindFirstChild("__THINGS")
-    local worlds = things and things:FindFirstChild("BlockWorlds")
-    local found, blockCount = {}, 0
-    if not worlds then return found, 0 end
-
-    for _, folder in ipairs(worlds:GetChildren()) do
-        for _, block in ipairs(folder:GetChildren()) do
-            local id = block:GetAttribute("id")
-            if id ~= nil then
-                blockCount = blockCount + 1
-                id = tostring(id)
-                if not seenIds[id] then
-                    seenIds[id] = true
-                    print("[DM Hunter] block id seen:", id) -- check F9 to see the real Dark Matter id
-                end
-                if matches(id) then
-                    found[#found + 1] = block
-                end
-            end
-        end
-    end
-    return found, blockCount
-end
-
-local espObjects = {} -- [target] = { highlight, tag, label }
-
-local function removeESP(target)
-    local e = espObjects[target]
-    if e then
-        e.highlight:Destroy()
-        e.tag:Destroy()
-        espObjects[target] = nil
-    end
-end
-
-local function clearESP()
-    for target in pairs(espObjects) do removeESP(target) end
-end
-
-local function addESP(target)
-    local part = baseOf(target)
-    if not part then return end
-    local highlight = new("Highlight", {
-        Adornee = target, FillColor = PURPLE, OutlineColor = Color3.new(1, 1, 1),
-        FillTransparency = 0.5, DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,
-    }, gui)
-    local tag = new("BillboardGui", {
-        Adornee = part, Size = UDim2.fromOffset(140, 30), StudsOffset = Vector3.new(0, 3, 0),
-        AlwaysOnTop = true,
-    }, gui)
-    local label = new("TextLabel", {
-        Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "Dark Matter",
-        TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.3,
-        Font = Enum.Font.GothamBold, TextSize = 13,
-    }, tag)
-    espObjects[target] = { highlight = highlight, tag = tag, label = label, id = tostring(target:GetAttribute("id") or "?") }
-end
-
-local function syncESP(targets)
-    local present = {}
-    for _, t in ipairs(targets) do present[t] = true end
-    for target in pairs(espObjects) do
-        if not present[target] or not target.Parent or not State.esp then removeESP(target) end
-    end
-    if State.esp then
-        local count = 0
-        for _ in pairs(espObjects) do count = count + 1 end
-        for _, t in ipairs(targets) do
-            if not espObjects[t] and count < 30 then -- Roblox caps active Highlights
-                addESP(t)
-                count = count + 1
-            end
-        end
-    end
-end
-
--- live distance on tags
-task.spawn(function()
-    while gui.Parent do
-        local char = LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then
-            for target, e in pairs(espObjects) do
-                local part = baseOf(target)
-                if part then
-                    e.label.Text = ("%s [%d]"):format(e.id, math.floor((part.Position - root.Position).Magnitude))
-                end
-            end
-        end
-        task.wait(0.25)
-    end
-end)
-
--- ---------------------- server hop --------------------------
-local hopping = false
-
-local function getServers(cursor)
-    local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100"):format(PlaceId)
-    if cursor then url = url .. "&cursor=" .. cursor end
-    local ok, res = pcall(function() return HttpService:JSONDecode(game:HttpGet(url)) end)
-    return ok and res or nil
-end
-
-local function hop()
-    if hopping then return end
-    hopping = true
-    setStatus(YELLOW, "Hopping...", ("Hops: %d"):format(Save.hops))
-
-    local function try()
-        local cursor
-        for _ = 1, 5 do
-            local data = getServers(cursor)
-            if data and data.data then
-                for _, s in ipairs(data.data) do
-                    if not Save.visited[s.id] and s.playing >= Config.MinPlayers
-                        and (s.playing / s.maxPlayers) <= Config.MaxFillRatio then
-                        Save.visited[s.id] = true
-                        Save.hops = Save.hops + 1
-                        persist()
-                        TeleportService:TeleportToPlaceInstance(PlaceId, s.id, LocalPlayer)
-                        return true
+        if success and result and result.data then
+            local validServers = {}
+            for _, server in ipairs(result.data) do
+                if type(server) == "table" and server.id ~= JobId and server.playing then
+                    if server.playing >= Config.MinPlayers and server.playing <= Config.MaxPlayers then
+                        table.insert(validServers, server.id)
                     end
                 end
-                cursor = data.nextPageCursor
-                if not cursor then break end
-            else
-                task.wait(2) -- rate limited
+            end
+
+            if #validServers > 0 then
+                State.TotalHops = State.TotalHops + 1
+                TeleportService:TeleportToPlaceInstance(PlaceId, validServers[math.random(1, #validServers)], LocalPlayer)
+                return
             end
         end
-        return false
-    end
 
-    if not try() then
-        Save.visited = { [JobId] = true } -- everything visited, start over
-        persist()
-        task.wait(3)
-        try()
-    end
-
-    task.wait(10)
-    hopping = false -- teleport didn't happen; allow retry
+        TeleportService:Teleport(PlaceId, LocalPlayer)
+    end)
 end
 
-TeleportService.TeleportInitFailed:Connect(function()
-    hopping = false
-    task.wait(2)
-    hop()
-end)
+HopButton.MouseButton1Click:Connect(HopServer)
 
-hopBtn.MouseButton1Click:Connect(function()
-    task.spawn(hop)
-end)
+-- Scanner Engine
+local function ScanTargetOres()
+    local count = 0
+    local things = Workspace:FindFirstChild("__THINGS")
+    local blockWorlds = things and things:FindFirstChild("BlockWorlds")
 
--- ---------------------- main loop ---------------------------
-local startTime = os.clock()
-local noOreSince
-local mineSince -- when mine blocks first loaded (grace period starts here)
-local teleported = {}
-
-task.spawn(function()
-    while gui.Parent do
-        if not State.enabled then
-            clearESP()
-            noOreSince = nil
-            setStatus(MUTED, "Disabled", ("Hops: %d"):format(Save.hops))
-        else
-            local targets, blockCount = scan()
-            syncESP(targets)
-            if blockCount > 0 then mineSince = mineSince or os.clock() else mineSince = nil end
-
-            if blockCount == 0 then
-                -- not inside a mine (or blocks not streamed in yet): don't hop
-                noOreSince = nil
-                setStatus(YELLOW, "Enter the Black Hole Core", ("No mine blocks loaded - Hops: %d"):format(Save.hops))
-            elseif #targets > 0 then
-                noOreSince = nil
-                setStatus(GREEN, "Dark Matter found - mine it!",
-                    ("%d Dark Matter ore(s) - Hops: %d"):format(#targets, Save.hops))
-
-                if Config.AutoTeleport then
-                    local char = LocalPlayer.Character
-                    local root = char and char:FindFirstChild("HumanoidRootPart")
-                    for _, t in ipairs(targets) do
-                        if root and not teleported[t] then
-                            teleported[t] = true
-                            local part = baseOf(t)
-                            if part then root.CFrame = CFrame.new(part.Position + Vector3.new(0, 4, 0)) end
-                            break
+    if blockWorlds then
+        State.InMiningZone = true
+        for _, container in ipairs(blockWorlds:GetChildren()) do
+            if string.find(container.Name, "Blocks") then
+                for _, block in ipairs(container:GetChildren()) do
+                    local rawId = block:GetAttribute("id") or block:GetAttribute("Id") or block:GetAttribute("ID") or block:GetAttribute("Type") or block.Name
+                    if rawId then
+                        local idLower = string.lower(tostring(rawId))
+                        if Config.TargetIDs[idLower] or string.find(idLower, "rainbow") or string.find(idLower, "dark") then
+                            count = count + 1
                         end
                     end
                 end
-            else
-                local scanning = (os.clock() - (mineSince or startTime)) < Config.ScanGrace
-                if scanning then
-                    setStatus(YELLOW, "Scanning...", ("0 Dark Matter ore(s) - Hops: %d"):format(Save.hops))
-                else
-                    noOreSince = noOreSince or os.clock()
-                    setStatus(RED, "No Dark Matter here", ("0 Dark Matter ore(s) - Hops: %d"):format(Save.hops))
-                    if State.autoHop and (os.clock() - noOreSince) >= State.hopDelay then
-                        task.spawn(hop)
-                    end
-                end
             end
         end
-        task.wait(1)
+    else
+        State.InMiningZone = false
+    end
+
+    return count
+end
+
+-- Main Loop
+c_spawn(function()
+    while State.BootTimer > 0 do
+        StatusLabel.Text = string.format("booting %ds...", math.ceil(State.BootTimer))
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 50)
+        InfoBox.Text = string.format(
+            "zone: booting  dm: 0\nhops: %d\nstatus: waiting boot",
+            State.TotalHops
+        )
+        c_wait(1)
+        State.BootTimer = State.BootTimer - 1
+    end
+
+    State.IsBooting = false
+
+    -- Set initial randomized timeout (e.g. 3.1s to 4.5s)
+    State.CurrentJitter = Config.BaseTimeout + (math.random(1, 15) / 10)
+
+    while c_wait(0.1) do
+        local currentTargetCount = ScanTargetOres()
+        State.DMCount = currentTargetCount
+
+        if currentTargetCount > 0 then
+            State.NoDMTimer = 0
+            -- Recalculate random hop threshold for next dry spell
+            State.CurrentJitter = Config.BaseTimeout + (math.random(1, 15) / 10)
+            StatusLabel.Text = string.format("Mining DM/Rainbow (%d)", currentTargetCount)
+            StatusLabel.TextColor3 = Color3.fromRGB(50, 220, 100)
+        else
+            State.NoDMTimer = State.NoDMTimer + 0.1
+            StatusLabel.Text = string.format("No DM %.1fs / %.1fs", State.NoDMTimer, State.CurrentJitter)
+            StatusLabel.TextColor3 = Color3.fromRGB(245, 180, 50)
+
+            if State.NoDMTimer >= State.CurrentJitter and Config.HopEnabled and not State.IsHopping then
+                HopServer()
+            end
+        end
+
+        InfoBox.Text = string.format(
+            "zone: %s  dm: %d\nhops: %d\nstatus: %s",
+            State.InMiningZone and "yes" or "no",
+            State.DMCount,
+            State.TotalHops,
+            State.NoDMTimer > 0 and "hopping soon..." or "active"
+        )
     end
 end)
-
-print("[DM Hunter] loaded OK")
-pcall(function()
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "DM Hunter", Text = "Loaded. Enter the Black Hole Core.", Duration = 5,
-    })
-end)
-end, function(e) return debug.traceback(tostring(e), 2) end)
-
-if not __ok then
-    warn("[DM Hunter] ERROR: " .. tostring(__err))
-    pcall(function()
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "DM Hunter ERROR", Text = tostring(__err):sub(1, 180), Duration = 20,
-        })
-    end)
-end
