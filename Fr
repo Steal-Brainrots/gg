@@ -255,9 +255,18 @@ local hopBtn = new("TextButton", {
 corner(hopBtn, 8)
 
 -- ---------------------- scanning + ESP ----------------------
+local function normalize(s)
+    return (s:lower():gsub("[^%w]", "")) -- drop spaces, underscores, symbols
+end
+
+local normKeywords = {}
+for _, kw in ipairs(Config.Keywords) do
+    table.insert(normKeywords, normalize(kw))
+end
+
 local function matches(name)
-    name = name:lower()
-    for _, kw in ipairs(Config.Keywords) do
+    name = normalize(name)
+    for _, kw in ipairs(normKeywords) do
         if name:find(kw, 1, true) then return true end
     end
     return false
