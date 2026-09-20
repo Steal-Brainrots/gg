@@ -10,6 +10,9 @@
       - HOP NOW            : hop immediately
 ]]
 
+local __ok, __err = xpcall(function()
+print("[DM Hunter] starting...")
+
 -- ========================= CONFIG =========================
 local Config = {
     Keywords     = { "dark matter", "exotic" }, -- matched against each block's "id" attribute (ignores case/spaces)
@@ -294,7 +297,7 @@ local function scan()
         for _, block in ipairs(folder:GetChildren()) do
             local id = block:GetAttribute("id")
             if id ~= nil then
-                blockCount += 1
+                blockCount = blockCount + 1
                 id = tostring(id)
                 if not seenIds[id] then
                     seenIds[id] = true
@@ -351,11 +354,11 @@ local function syncESP(targets)
     end
     if State.esp then
         local count = 0
-        for _ in pairs(espObjects) do count += 1 end
+        for _ in pairs(espObjects) do count = count + 1 end
         for _, t in ipairs(targets) do
             if not espObjects[t] and count < 30 then -- Roblox caps active Highlights
                 addESP(t)
-                count += 1
+                count = count + 1
             end
         end
     end
@@ -402,7 +405,7 @@ local function hop()
                     if not Save.visited[s.id] and s.playing >= Config.MinPlayers
                         and (s.playing / s.maxPlayers) <= Config.MaxFillRatio then
                         Save.visited[s.id] = true
-                        Save.hops += 1
+                        Save.hops = Save.hops + 1
                         persist()
                         TeleportService:TeleportToPlaceInstance(PlaceId, s.id, LocalPlayer)
                         return true
@@ -492,3 +495,20 @@ task.spawn(function()
         task.wait(1)
     end
 end)
+
+print("[DM Hunter] loaded OK")
+pcall(function()
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "DM Hunter", Text = "Loaded. Enter the Black Hole Core.", Duration = 5,
+    })
+end)
+end, function(e) return debug.traceback(tostring(e), 2) end)
+
+if not __ok then
+    warn("[DM Hunter] ERROR: " .. tostring(__err))
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "DM Hunter ERROR", Text = tostring(__err):sub(1, 180), Duration = 20,
+        })
+    end)
+end
